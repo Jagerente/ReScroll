@@ -1,0 +1,4 @@
+<Bindings>
+    <Binding name="CLICK ReScrollApplyButton:LeftButton" header="RESCROLL" category="ADDONS">
+    </Binding>
+</Bindings>
