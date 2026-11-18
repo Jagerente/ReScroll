@@ -4,12 +4,14 @@ local Catalog = ns.Catalog
 local IsSecret = ns.IsSecret
 local GetAuraDataByIndex = C_UnitAuras.GetAuraDataByIndex
 local GetAuraDataByAuraInstanceID = C_UnitAuras.GetAuraDataByAuraInstanceID
+local canaccesstable = canaccesstable
 
 local Auras = { active = {} }
 ns.Auras = Auras
 
 local MAX_AURAS = 255
 local HELPFUL = "HELPFUL"
+local RESTRICTION_INACTIVE = Enum.AddOnRestrictionState and Enum.AddOnRestrictionState.Inactive or 0
 
 local active = Auras.active
 local spellOfInstance = {}
@@ -51,7 +53,21 @@ function Auras.Scan()
     ns.Fire("AURAS_CHANGED")
 end
 
+local function CanRead(value)
+    if IsSecret(value) then return false end
+    return type(value) ~= "table" or canaccesstable == nil or canaccesstable(value)
+end
+
+local function IsReadable(info)
+    return CanRead(info.isFullUpdate) and CanRead(info.addedAuras)
+        and CanRead(info.updatedAuraInstanceIDs) and CanRead(info.removedAuraInstanceIDs)
+end
+
 local function ApplyUpdate(info)
+    if info and not IsReadable(info) then
+        dirty = true
+        return
+    end
     if not info or info.isFullUpdate then
         Auras.Scan()
         return
@@ -98,11 +114,16 @@ function Auras.CollectHelpful(out)
     return out
 end
 
+local function ScanIfDirty()
+    if dirty then Auras.Scan() end
+end
+
 ns.Listen("LOGIN", function()
     ns.RegisterUnitEvent("UNIT_AURA", "player", function(_, info) ApplyUpdate(info) end)
     ns.RegisterEvent("PLAYER_ENTERING_WORLD", Auras.Scan)
-    ns.RegisterEvent("PLAYER_REGEN_ENABLED", function()
-        if dirty then Auras.Scan() end
+    ns.RegisterEvent("PLAYER_REGEN_ENABLED", ScanIfDirty)
+    ns.RegisterEvent("ADDON_RESTRICTION_STATE_CHANGED", function(_, state)
+        if state == RESTRICTION_INACTIVE then ScanIfDirty() end
     end)
     Auras.Scan()
 end)
