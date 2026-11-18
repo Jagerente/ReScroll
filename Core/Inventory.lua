@@ -74,27 +74,51 @@ function Inventory.TopUsableRank(family, level)
     return best
 end
 
-function Inventory.StockRanks(family, level, out)
+local function RanksDown(family, top, lowest, out)
     wipe(out)
-    local top = Inventory.TopUsableRank(family, level)
     if not top then return out end
-    local lowest = ns.db.lowerRanks and 1 or top.index
     for index = top.index, lowest, -1 do
         out[#out + 1] = family.ranks[index]
     end
     return out
 end
 
-local stockRanks = {}
+function Inventory.OfferRanks(family, level, out)
+    local top = Inventory.TopUsableRank(family, level)
+    return RanksDown(family, top, ns.db.lowerRanks and 1 or (top and top.index), out)
+end
 
-function Inventory.StockCount(family)
+function Inventory.StockRank(family, level)
+    local top = Inventory.TopUsableRank(family, level or UnitLevel("player"))
+    local picked = ns.charDB.buyRanks[family.key]
+    if top and picked and picked < top.index and ns.db.lowerRanks then return family.ranks[picked] end
+    return top
+end
+
+function Inventory.CountedRanks(family, level, grade, out)
+    return RanksDown(family, Inventory.TopUsableRank(family, level), grade and grade.index or 1, out)
+end
+
+local counted = {}
+
+function Inventory.StockCount(family, grade)
+    local level = UnitLevel("player")
+    grade = grade or Inventory.StockRank(family, level)
     local inBags, inBank, inMail = 0, 0, 0
-    for _, rank in ipairs(Inventory.StockRanks(family, UnitLevel("player"), stockRanks)) do
+    if not grade then return inBags, inBank, inMail end
+    for _, rank in ipairs(Inventory.CountedRanks(family, level, grade, counted)) do
         inBags = inBags + Inventory.Count(rank.item)
         inBank = inBank + Inventory.BankCount(rank.item)
         inMail = inMail + Inventory.MailCount(rank.item)
     end
     return inBags, inBank, inMail
+end
+
+function Inventory.Stock(family, grade)
+    local have, bank, inMail = Inventory.StockCount(family, grade)
+    if not ns.db.countBank then bank = 0 end
+    local need = Inventory.StockTarget(family) - have - bank - inMail
+    return { have = have, bank = bank, mail = inMail, need = need }
 end
 
 local function CastsItself(family, rank)
@@ -112,12 +136,13 @@ function Inventory.GetShoppingList(out)
     local level = UnitLevel("player")
     for _, family in ipairs(Catalog.ordered) do
         if Inventory.Restockable(family, level) then
-            local have, bank, inMail = Inventory.StockCount(family)
-            if not ns.db.countBank then bank = 0 end
-            local need = Inventory.StockTarget(family) - have - bank - inMail
-            if need > 0 then
-                local ranks = Inventory.StockRanks(family, level, {})
-                out[#out + 1] = { family = family, ranks = ranks, need = need, have = have, bank = bank, mail = inMail }
+            local ranks = Inventory.OfferRanks(family, level, {})
+            local stocks = {}
+            for index, rank in ipairs(ranks) do
+                stocks[index] = Inventory.Stock(family, rank)
+            end
+            if stocks[1].need > 0 then
+                out[#out + 1] = { family = family, ranks = ranks, stocks = stocks }
             end
         end
     end

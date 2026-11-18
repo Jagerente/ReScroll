@@ -40,7 +40,7 @@ end
 
 local function Paint()
     local entries = Bank.entries
-    panel.subtitle:SetText(string.format(L.BANK_SUBTITLE, ns.db.stock))
+    panel.subtitle:SetText(L.BANK_SUBTITLE)
     panel:PaintRows(entries, CreateRow, PaintRow)
 
     local total = 0

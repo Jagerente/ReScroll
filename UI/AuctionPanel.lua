@@ -34,18 +34,20 @@ local function ShownItem(entry)
 end
 
 local function Stock(entry)
+    local target = ns.Inventory.StockTarget(entry.family)
     if entry.mail > 0 then
-        if entry.bank > 0 then return string.format(L.AH_HAVE_BANK_MAIL, entry.have, entry.bank, entry.mail) end
-        return string.format(L.AH_HAVE_MAIL, entry.have, entry.mail)
+        if entry.bank > 0 then return string.format(L.AH_HAVE_BANK_MAIL, entry.have, target, entry.bank, entry.mail) end
+        return string.format(L.AH_HAVE_MAIL, entry.have, target, entry.mail)
     end
-    if entry.bank > 0 then return string.format(L.AH_HAVE_BANK, entry.have, entry.bank) end
-    return string.format(L.AH_HAVE, entry.have)
+    if entry.bank > 0 then return string.format(L.AH_HAVE_BANK, entry.have, target, entry.bank) end
+    return string.format(L.AH_HAVE, entry.have, target)
 end
 
 local function Detail(entry)
     local status = entry.status
     local offer = entry.offer
     if status == Market.SEARCHING then return L.AH_SEARCHING, C.muted end
+    if status == Market.ENOUGH then return Stock(entry), C.muted end
     if status == Market.NONE then return L.AH_NONE, C.bad end
     if status == Market.POOR then return L.AH_POOR, C.bad end
     if status == Market.BUYING then return L.AH_BUYING, C.accent end
@@ -71,6 +73,12 @@ local function OfferFor(entry, rank)
     for _, offer in ipairs(entry.offers) do
         if offer.rank == rank then return offer end
     end
+end
+
+local function ButtonText(entry, confirm)
+    if confirm then return L.AH_CONFIRM end
+    if entry.status == Market.ENOUGH then return L.AH_ENOUGH end
+    return string.format(L.AH_BUY, LotSize(entry))
 end
 
 local function OnSale(offer)
@@ -100,8 +108,12 @@ local function ShowSegmentTooltip(segment)
         LockLines(segment)
     else
         AddLine(string.format(L.AH_PER_SCROLL, Money(offer.unitCost)), C.text)
-        AddLine(string.format(L.AH_TIP_AVAILABLE, offer.quantity), C.muted)
-        AddLine(string.format(L.AH_TIP_TOTAL, offer.quantity, Money(offer.cost)), C.muted)
+        if offer.quantity > 0 then
+            AddLine(string.format(L.AH_TIP_AVAILABLE, offer.quantity), C.muted)
+            AddLine(string.format(L.AH_TIP_TOTAL, offer.quantity, Money(offer.cost)), C.muted)
+        else
+            AddLine(L.AH_TIP_ENOUGH, C.muted)
+        end
         if offer.beyond then AddLine(string.format(L.AH_TIP_BEYOND, Money(offer.beyond)), C.warn) end
         if offer.entry.offer ~= offer then AddLine(L.AH_TIP_PICK, C.accent) end
     end
@@ -145,7 +157,7 @@ local function SegmentPrice(rank, offer)
         return L.AH_LOCK_LOWER_SHORT, C.muted
     end
     if not Market.IsSettled(offer) then return "…", C.muted end
-    if offer.status ~= Market.READY then return "—", C.muted end
+    if offer.status ~= Market.READY then return L.AH_NONE_SHORT, C.muted end
     return ShortMoney(offer.unitCost), Market.IsRaised(offer) and C.warn or C.text
 end
 
@@ -257,7 +269,7 @@ local function PaintRow(row, fresh)
     if priced then row.price:SetText(Money(quoted and entry.quotedTotal or entry.offer.nextCost)) end
     row.price:SetTextColor(unpack(confirm and C.warn or C.text))
 
-    row.button.text:SetText(confirm and L.AH_CONFIRM or string.format(L.AH_BUY, LotSize(entry)))
+    row.button.text:SetText(ButtonText(entry, confirm))
     row.button:SetStyle(confirm and "primary" or "default")
     SidePanel.SetEnabled(row.button, status == Market.READY or confirm)
     PaintStrip(row, fresh)
@@ -266,7 +278,7 @@ local function PaintRow(row, fresh)
 end
 
 local function Paint()
-    panel.subtitle:SetText(string.format(ns.db.lowerRanks and L.AH_SUBTITLE_LOWER or L.AH_SUBTITLE, ns.db.stock))
+    panel.subtitle:SetText(ns.db.lowerRanks and L.AH_SUBTITLE_LOWER or L.AH_SUBTITLE)
     panel:PaintRows(Market.entries, CreateRow, PaintRow)
     panel.footerText:SetText(string.format(L.AH_TOTAL, Money(Market.Total())))
     panel.footerText:SetShown(#Market.entries > 0)

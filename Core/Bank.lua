@@ -64,8 +64,8 @@ function Bank.FreeSlots()
     return free
 end
 
-local function BestRankInBank(family, level)
-    for _, rank in ipairs(Inventory.StockRanks(family, level, ranks)) do
+local function BestRankInBank(family, level, grade)
+    for _, rank in ipairs(Inventory.CountedRanks(family, level, grade, ranks)) do
         if Inventory.BankCount(rank.item) > 0 then return rank end
     end
 end
@@ -75,13 +75,14 @@ local function Rebuild()
     local level = UnitLevel("player")
     for _, family in ipairs(Catalog.ordered) do
         if Inventory.Restockable(family, level) then
-            local have, inBank = Inventory.StockCount(family)
+            local grade = Inventory.StockRank(family, level)
+            local have, inBank = Inventory.StockCount(family, grade)
             local take = math.min(Inventory.StockTarget(family) - have, inBank)
             if take > 0 then
                 local entry = pool[family.key] or { family = family }
                 pool[family.key] = entry
-                entry.take, entry.have, entry.bank = take, have, inBank
-                entry.rank = BestRankInBank(family, level)
+                entry.take, entry.have, entry.bank, entry.grade = take, have, inBank, grade
+                entry.rank = BestRankInBank(family, level, entry.grade)
                 entries[#entries + 1] = entry
             end
         end
@@ -93,7 +94,7 @@ local function NextMove()
     local level = UnitLevel("player")
     for _, entry in ipairs(entries) do
         if not job.key or job.key == entry.family.key then
-            for _, rank in ipairs(Inventory.StockRanks(entry.family, level, ranks)) do
+            for _, rank in ipairs(Inventory.CountedRanks(entry.family, level, entry.grade, ranks)) do
                 local bag, slot, stack = FindInBank(rank.item)
                 if bag then
                     return { item = rank.item, bag = bag, slot = slot, stack = stack, count = math.min(entry.take, stack) }
@@ -180,16 +181,15 @@ local function OnClosed()
     ns.Fire("BANK_SHOWN", false)
 end
 
-ns.Listen("INVENTORY_CHANGED", function()
+local function RebuildIfIdle()
     if not Bank.open or job then return end
     Rebuild()
     Changed()
-end)
-ns.Listen("FAMILIES_CHANGED", function()
-    if not Bank.open or job then return end
-    Rebuild()
-    Changed()
-end)
+end
+
+ns.Listen("INVENTORY_CHANGED", RebuildIfIdle)
+ns.Listen("FAMILIES_CHANGED", RebuildIfIdle)
+ns.Listen("STOCK_CHANGED", RebuildIfIdle)
 ns.Listen("SETTING_CHANGED", function(key)
     if not Bank.open then return end
     if key == "bank" and not ns.db.bank then

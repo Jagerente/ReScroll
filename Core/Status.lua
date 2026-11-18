@@ -213,7 +213,7 @@ local function ClearSnoozes()
     Status.UpdateSoon()
 end
 
-for _, message in ipairs({ "AURAS_CHANGED", "INVENTORY_CHANGED", "GROUP_CHANGED", "FAMILIES_CHANGED", "LEARNED" }) do
+for _, message in ipairs({ "AURAS_CHANGED", "INVENTORY_CHANGED", "GROUP_CHANGED", "FAMILIES_CHANGED", "LEARNED", "STOCK_CHANGED" }) do
     ns.Listen(message, Status.UpdateSoon)
 end
 

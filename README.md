@@ -47,7 +47,8 @@ The panel shows up out of combat when something is missing: always (the default)
 When you open the auction house, a panel next to it lists the scrolls you are short of, up to the stock you keep (5 of each by default). Scrolls in the bank count toward it; switch off "Count scrolls in the bank" right in the panel to buy the full stock for your bags. Buffs you cast yourself are left out.
 
 - The strongest rank on sale is chosen by default. Under each scroll all four ranks are listed with their bonus and price per scroll; click another rank to buy it instead, and your pick is remembered. Ranks above your level, switched off or not for sale are shown locked. Hover a rank for how many are on sale at that price and what comes after.
-- Lower ranks are listed when "Use lower ranks" is on, and then they count toward the stock. Turn it off to keep and buy only the best rank.
+- The stock counts the rank you buy and higher ones. With 2 scrolls of rank IV and 3 of rank III you keep 2 of 5 rank IV scrolls, and the panel offers 3 more of rank IV. Pick rank III instead and the same bags hold 5 of 5.
+- Lower ranks are listed when "Use lower ranks" is on. Turn it off to keep and buy only the best rank.
 - **Price jump guard.** A purchase takes only scrolls priced at most 20% (adjustable) above the cheapest one. If 4 scrolls cost 15s and the fifth costs 1g, the panel buys 4 and tells you the rest is dearer.
 - **Buy N** buys that scroll in one click. If the price went up since the lookup, the row asks you to confirm the new price.
 - Rows show when a scroll is not for sale or you are short of gold.
@@ -56,7 +57,7 @@ When you open the auction house, a panel next to it lists the scrolls you are sh
 
 ## Bank
 
-When you open the bank, a panel next to it lists the scrolls your bags are short of and how many of them are in the bank. **Take all** moves them into your bags, the best rank first, splitting stacks so you get exactly the stock. Each row has its own **Take** button. Turn on "Take them right away" to skip the click.
+When you open the bank, a panel next to it lists the scrolls your bags are short of and how many of them are in the bank. **Take all** moves them into your bags, the best rank first and only ranks the stock counts, splitting stacks so you get exactly the stock. Each row has its own **Take** button. Turn on "Take them right away" to skip the click.
 
 Both panels sit to the right of their window and follow it, also when a bag addon such as EllesmereUI replaces the bank window. Drag a panel to move it, or set its offsets in the settings; right-click a panel to open or close its settings, middle-click to put it back.
 

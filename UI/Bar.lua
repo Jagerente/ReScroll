@@ -120,24 +120,35 @@ local function AddStatusLines(record)
     end
 end
 
-local byRank, stockRanks = {}, {}
+local countedRanks, lowerRanks, offeredRanks = {}, {}, {}
 
-local function RankBreakdown(family)
-    wipe(byRank)
-    for _, rank in ipairs(Inventory.StockRanks(family, UnitLevel("player"), stockRanks)) do
+local function RankBreakdown(family, grade)
+    wipe(countedRanks)
+    wipe(lowerRanks)
+    for _, rank in ipairs(Inventory.OfferRanks(family, UnitLevel("player"), offeredRanks)) do
         local count = Inventory.Count(rank.item)
-        if count > 0 then byRank[#byRank + 1] = string.format(L.RANK_COUNT, RomanRank(rank), count) end
+        if count > 0 then
+            local list = grade and rank.index >= grade.index and countedRanks or lowerRanks
+            list[#list + 1] = string.format(L.RANK_COUNT, RomanRank(rank), count)
+        end
     end
-    return #byRank > 1 and table.concat(byRank, ", ") or nil
+    local counted = #countedRanks > 1 and table.concat(countedRanks, ", ") or nil
+    local lower = #lowerRanks > 0 and table.concat(lowerRanks, ", ") or nil
+    return counted, lower
 end
 
 local function AddStockLines(record)
     if record.spell then return end
     local family = record.family
-    local count, bank = Inventory.StockCount(family)
-    AddLine(string.format(L.TIP_IN_BAGS, count, Inventory.StockTarget(family)), C.muted)
-    local breakdown = RankBreakdown(family)
-    if breakdown then AddLine(string.format(L.TIP_BY_RANK, breakdown), C.muted) end
+    local grade = Inventory.StockRank(family)
+    local count, bank = Inventory.StockCount(family, grade)
+    AddLine(string.format(L.TIP_STOCK, count, Inventory.StockTarget(family)), C.muted)
+    if grade and grade ~= Inventory.TopUsableRank(family, UnitLevel("player")) then
+        AddLine(string.format(L.TIP_STOCK_FROM, RomanRank(grade)), C.muted)
+    end
+    local counted, lower = RankBreakdown(family, grade)
+    if counted then AddLine(string.format(L.TIP_BY_RANK, counted), C.muted) end
+    if lower then AddLine(string.format(L.TIP_LOWER_RANKS, lower), C.muted) end
     if bank > 0 then AddLine(string.format(L.TIP_IN_BANK, bank), C.muted) end
     if record.rank and record.rank ~= record.top then
         AddLine(string.format(L.TIP_LOWER_RANK, RomanRank(record.rank), RomanRank(record.top)), C.warn)
@@ -189,10 +200,16 @@ local function PaintTimer(slot)
     end
 end
 
-local function CountColor(record, count)
-    if count == 0 then return C.bad end
-    if count < Inventory.StockTarget(record.family) then return C.warn end
+local function CountColor(record, stock)
+    if stock == 0 then return C.bad end
+    if stock < Inventory.StockTarget(record.family) then return C.warn end
     return C.text
+end
+
+local function SlotCount(record, rank)
+    local stock = Inventory.StockCount(record.family)
+    if stock > 0 then return stock, stock end
+    return Inventory.Count(rank.item), stock
 end
 
 local function PaintSlot(slot)
@@ -212,11 +229,12 @@ local function PaintSlot(slot)
     slot.rankText:SetText(RomanRank(rank))
     slot.rankText:SetTextColor(unpack(state == Status.UPGRADE and C.good or C.text))
 
-    local count = not record.spell and Inventory.StockCount(record.family) or nil
+    local count, stock
+    if not record.spell then count, stock = SlotCount(record, rank) end
     slot.count:SetShown(count ~= nil and ns.db.showCounts)
     if count then
         slot.count:SetText(count)
-        slot.count:SetTextColor(unpack(CountColor(record, count)))
+        slot.count:SetTextColor(unpack(CountColor(record, stock)))
     end
 
     slot.scrim:SetShown(slot.rankText:IsShown() or slot.count:IsShown())

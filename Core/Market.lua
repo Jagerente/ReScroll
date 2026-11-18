@@ -13,6 +13,7 @@ Market.BUYING = "buying"
 Market.CONFIRM = "confirm"
 Market.POOR = "poor"
 Market.RAISED = "raised"
+Market.ENOUGH = "enough"
 
 local COMMODITY, ITEM = "commodity", "item"
 local SEARCH_TIMEOUT = 6
@@ -76,14 +77,22 @@ function Market.IsRaised(offer)
     return first ~= nil and offer.base > Ceiling(first)
 end
 
+local function ShowStock(entry, offer)
+    local source = offer or entry.offers[1]
+    entry.need, entry.have, entry.bank, entry.mail = source.need, source.have, source.bank, source.mail
+end
+
 local function Settle(entry)
     if Busy(entry) then return end
     local offer = ChosenOffer(entry)
     entry.offer = offer
+    ShowStock(entry, offer)
     if not offer then
         entry.status = Market.NONE
     elseif not Market.IsSettled(offer) then
         entry.status = Market.SEARCHING
+    elseif offer.need <= 0 then
+        entry.status = Market.ENOUGH
     elseif offer.nextCost > GetMoney() then
         entry.status = Market.POOR
     elseif Market.IsRaised(offer) then
@@ -138,20 +147,20 @@ end
 
 local function Priced(offer, quantity, cost, base, beyond)
     offer.quantity, offer.cost = quantity, cost
-    offer.unitCost = quantity > 0 and cost / quantity or 0
+    offer.unitCost = quantity > 0 and cost / quantity or base or 0
     offer.base, offer.beyond = base or 0, beyond
-    if quantity > 0 and not seen[offer.item] then seen[offer.item] = offer.base end
+    if base and not seen[offer.item] then seen[offer.item] = base end
 end
 
 local function ReadCommodities(offer)
-    local need = offer.entry.need
+    local need = offer.need
     local quantity, cost, base, beyond = 0, 0, nil, nil
     for index = 1, C_AuctionHouse.GetNumCommoditySearchResults(offer.item) do
-        if quantity >= need then break end
         local result = C_AuctionHouse.GetCommoditySearchResultInfo(offer.item, index)
         local available = result and result.quantity - result.numOwnerItems or 0
         if available > 0 then
             base = base or result.unitPrice
+            if quantity >= need then break end
             if result.unitPrice > Ceiling(base) then
                 beyond = result.unitPrice
                 break
@@ -165,7 +174,7 @@ local function ReadCommodities(offer)
     Priced(offer, quantity, cost, base, beyond)
     offer.nextCost = cost
     offer.unitPrice = quantity > 0 and math.ceil(cost / quantity) or 0
-    offer.status = quantity > 0 and Market.READY or Market.NONE
+    offer.status = base and Market.READY or Market.NONE
 end
 
 local function UnitPrice(lot)
@@ -177,7 +186,7 @@ local function ByUnitPrice(a, b)
 end
 
 local function ReadItems(offer, itemKey)
-    local need = offer.entry.need
+    local need = offer.need
     local lots = {}
     for index = 1, C_AuctionHouse.GetNumItemSearchResults(itemKey) do
         local result = C_AuctionHouse.GetItemSearchResultInfo(itemKey, index)
@@ -201,7 +210,7 @@ local function ReadItems(offer, itemKey)
     offer.auctions = auctions
     Priced(offer, quantity, cost, base, beyond)
     offer.nextCost = auctions[1] and auctions[1].buyoutAmount or 0
-    offer.status = auctions[1] and Market.READY or Market.NONE
+    offer.status = base and Market.READY or Market.NONE
 end
 
 local function Accepts(offer)
@@ -239,21 +248,36 @@ local function DropOffers(entry)
     wipe(entry.offers)
 end
 
-local function SetRanks(entry, ranks)
+local function CopyStock(offer, stock)
+    local changed = offer.need ~= stock.need
+    offer.need, offer.have, offer.bank, offer.mail = stock.need, stock.have, stock.bank, stock.mail
+    return changed
+end
+
+local function SetRanks(entry, wanted)
     DropOffers(entry)
-    for index, rank in ipairs(ranks) do
+    for index, rank in ipairs(wanted.ranks) do
         local offer = { entry = entry, rank = rank, item = rank.item }
+        CopyStock(offer, wanted.stocks[index])
         entry.offers[index] = offer
         byItem[rank.item] = offer
     end
 end
 
+local function Restock(entry, wanted)
+    local changed = false
+    for index, offer in ipairs(entry.offers) do
+        if CopyStock(offer, wanted.stocks[index]) then changed = true end
+    end
+    return changed
+end
+
 local function Sync(entry, wanted)
     local sameRanks = SameRanks(entry, wanted.ranks)
-    local stale = entry.need ~= wanted.need or not sameRanks
-    entry.need, entry.have, entry.bank, entry.mail = wanted.need, wanted.have, wanted.bank, wanted.mail
+    local stale = not sameRanks or Restock(entry, wanted)
+    if sameRanks then ShowStock(entry, entry.offer) end
     if not stale or Busy(entry) then return end
-    if not sameRanks then SetRanks(entry, wanted.ranks) end
+    if not sameRanks then SetRanks(entry, wanted) end
     Research(entry)
 end
 
@@ -292,9 +316,11 @@ end
 
 function Market.Pick(entry, rank)
     if Busy(entry) or not byItem[rank.item] or byItem[rank.item].status ~= Market.READY then return end
-    ns.charDB.buyRanks[entry.family.key] = rank.index
+    local default = entry.offers[1].rank == rank
+    ns.charDB.buyRanks[entry.family.key] = not default and rank.index or nil
     Settle(entry)
     Changed()
+    ns.Fire("STOCK_CHANGED")
 end
 
 local function EndPurchase(entry, research)
