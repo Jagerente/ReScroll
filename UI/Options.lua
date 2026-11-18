@@ -463,6 +463,7 @@ local function BuildPanel()
     AddToggle(page, "showHeader", "SHOW_HEADER", "SHOW_HEADER_DESC")
     AddToggle(page, "showCounts", "SHOW_COUNTS", "SHOW_COUNTS_DESC")
     AddToggle(page, "locked", "LOCKED", "LOCKED_DESC")
+    AddParagraph(page, "MOVE_EXPLAIN", 6)
     AddRecenterButton(page)
 end
 

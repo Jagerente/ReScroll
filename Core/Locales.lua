@@ -22,7 +22,7 @@ STRINGS.enUS = {
     APPLY = "Apply",
     BINDING_APPLY = "Apply the next missing scroll",
 
-    TIP_SNOOZE = "Right-click: hide until you change zones.",
+    TIP_SNOOZE = "Right-click: hide until you change zones. Alt-drag moves the panel.",
     TIP_MISSING = "Missing. Click to apply it to yourself.",
     TIP_EXPIRING = "Runs out in %s. Click to refresh.",
     TIP_NO_REFRESH = "Your scrolls are weaker than the active buff, so it cannot be refreshed yet.",
@@ -167,6 +167,7 @@ STRINGS.enUS = {
     SHOW_COUNTS_DESC = "How many scrolls you keep: the rank you buy and higher ones. Amber below the stock, red at 0.",
     LOCKED = "Lock the panel",
     LOCKED_DESC = "The panel can no longer be moved.",
+    MOVE_EXPLAIN = "Drag the title line or Alt-drag an icon to move the panel. Middle-click the title line puts the panel back.",
     RECENTER = "Move the panel back",
 
     SECTION_BEHAVIOR = "Behavior",
@@ -218,7 +219,7 @@ STRINGS.ruRU = {
     APPLY = "Применить",
     BINDING_APPLY = "Применить следующий свиток",
 
-    TIP_SNOOZE = "ПКМ: скрыть до смены зоны.",
+    TIP_SNOOZE = "ПКМ: скрыть до смены зоны. Alt+перетаскивание двигает панель.",
     TIP_MISSING = "Не хватает. Нажмите, чтобы применить на себя.",
     TIP_EXPIRING = "Спадёт через %s. Нажмите, чтобы обновить.",
     TIP_NO_REFRESH = "Ваши свитки слабее активного баффа, обновить пока нельзя.",
@@ -363,6 +364,7 @@ STRINGS.ruRU = {
     SHOW_COUNTS_DESC = "Сколько свитков в запасе: ранг, который вы покупаете, и выше. Янтарным, если меньше запаса, красным при 0.",
     LOCKED = "Закрепить панель",
     LOCKED_DESC = "Панель больше нельзя передвинуть.",
+    MOVE_EXPLAIN = "Панель двигается за строку заголовка или Alt+перетаскиванием иконки. Клик колёсиком по строке заголовка возвращает панель на место.",
     RECENTER = "Вернуть панель на место",
 
     SECTION_BEHAVIOR = "Поведение",

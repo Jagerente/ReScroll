@@ -39,6 +39,7 @@ Stacking rules come from the server and may differ from Classic. When a scroll b
 - Click an icon to apply that scroll to yourself. Scrolls always go on you, even with a friendly target.
 - **Apply** goes through the missing buffs one by one. Bind a key to it in the settings (General tab) or in the game's key bindings, then press it a few times.
 - Right-click an icon to hide it until you change zones.
+- Drag the title line or Alt-drag an icon to move the panel; middle-click the title line to put it back.
 
 The panel shows up out of combat when something is missing: always (the default), in a group (and in any dungeon or raid), or only on a ready check. On a ready check it also shows up for 40 seconds and flashes.
 

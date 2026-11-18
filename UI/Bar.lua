@@ -18,6 +18,7 @@ Bar.BINDING = "CLICK " .. Bar.APPLY_BUTTON .. ":LeftButton"
 local PAD = 6
 local HEADER_HEIGHT, HEADER_GAP = 14, 5
 local HEADER_GLYPH_HEIGHT, HEADER_GLYPH_GAP = 11, 5
+local NO_ACTION = "none"
 local APPLY_TEXT_PAD, APPLY_MIN_WIDTH = 12, 64
 local SCRIM_ALPHA = 0.85
 local LABEL_INSET = 3
@@ -47,6 +48,7 @@ local timerTicker
 local pendingRefresh = false
 local readyUntil = 0
 local shown = false
+local moving = false
 
 local function InCombat()
     return InCombatLockdown()
@@ -251,11 +253,47 @@ local function Highlight(slot, on)
     UI.Tween(slot.hover, on and HOVER_ALPHA or 0, 0.12, function(_, value) slot.highlight:SetAlpha(value) end)
 end
 
+local function SavePosition()
+    local point, _, _, x, y = holder:GetPoint(1)
+    local position = ns.db.position
+    position.point, position.x, position.y = point, x, y
+end
+
+local function StartMoving()
+    if ns.db.locked or InCombat() then return false end
+    moving = true
+    holder:Raise()
+    holder:StartMoving()
+end
+
+local function StopMoving()
+    if not moving then return end
+    moving = false
+    holder:StopMovingOrSizing()
+    SavePosition()
+end
+
+local function StartAltMoving()
+    if not IsAltKeyDown() then return false end
+    GameTooltip:Hide()
+    return StartMoving()
+end
+
+local function SetUpButton(button)
+    button:RegisterForClicks("AnyUp", "AnyDown")
+    button:SetAttribute("unit", "player")
+    button:SetAttribute("*type2", NO_ACTION)
+    button:SetAttribute("alt-type1", NO_ACTION)
+    W.DragHandle(button, StartAltMoving, StopMoving)
+end
+
+local function OnPreClick(self, button, down)
+    if button == "LeftButton" and down and not IsAltKeyDown() then NoteUse(self.record) end
+end
+
 local function CreateSlot(index)
     local slot = CreateFrame("Button", "ReScrollSlot" .. index, bar, "SecureActionButtonTemplate")
-    slot:RegisterForClicks("AnyUp", "AnyDown")
-    slot:SetAttribute("unit", "player")
-    slot:SetAttribute("type2", "none")
+    SetUpButton(slot)
     slot:Hide()
     slot:SetAlpha(0)
 
@@ -303,9 +341,7 @@ local function CreateSlot(index)
     slot.dot:SetPoint("TOPRIGHT", -3, -3)
 
     slot.fade = {}
-    slot:SetScript("PreClick", function(self, button, down)
-        if button == "LeftButton" and down then NoteUse(self.record) end
-    end)
+    slot:SetScript("PreClick", OnPreClick)
     slot:SetScript("PostClick", function(self, button, down)
         if button == "RightButton" and not down and self.record and not ns.TestMode.active and not InCombat() then
             Status.Snooze(self.record.family)
@@ -342,26 +378,16 @@ end
 
 local function CreateApplyButton()
     applyButton = CreateFrame("Button", Bar.APPLY_BUTTON, bar, "SecureActionButtonTemplate")
-    applyButton:RegisterForClicks("AnyUp", "AnyDown")
-    applyButton:SetAttribute("unit", "player")
-    applyButton:SetAttribute("type2", "none")
+    SetUpButton(applyButton)
     local fill = applyButton:CreateTexture(nil, "BACKGROUND")
     fill:SetAllPoints()
     W.HoverFill(applyButton, fill, C.accent, { 0.973, 0.792, 0.420, 1 })
     applyButton.label = UI.BoldText(applyButton, T.label, C.onAccent)
     applyButton.label:SetPoint("CENTER")
     applyButton.fade = {}
-    applyButton:SetScript("PreClick", function(self, button, down)
-        if button == "LeftButton" and down then NoteUse(self.record) end
-    end)
+    applyButton:SetScript("PreClick", OnPreClick)
     applyButton:HookScript("OnMouseDown", function(self) self.label:SetPoint("CENTER", 0, -PRESS_INSET) end)
     applyButton:HookScript("OnMouseUp", function(self) self.label:SetPoint("CENTER", 0, 0) end)
-end
-
-local function SavePosition()
-    local point, _, _, x, y = holder:GetPoint(1)
-    local position = ns.db.position
-    position.point, position.x, position.y = point, x, y
 end
 
 local function CreateHeader()
@@ -385,14 +411,7 @@ local function CreateHeader()
             Bar.ResetPosition()
         end
     end)
-    W.DragHandle(header, function()
-        if ns.db.locked or InCombat() then return false end
-        holder:Raise()
-        holder:StartMoving()
-    end, function()
-        holder:StopMovingOrSizing()
-        SavePosition()
-    end)
+    W.DragHandle(header, StartMoving, StopMoving)
 end
 
 function Bar.ResetPosition()
@@ -704,6 +723,7 @@ ns.Listen("LOGIN", function()
     ns.RegisterEvent("GROUP_ROSTER_UPDATE", RefreshAnimated)
     ns.RegisterEvent("PLAYER_REGEN_DISABLED", OnCombatStart)
     ns.RegisterEvent("PLAYER_REGEN_ENABLED", function()
+        StopMoving()
         FinishHiding()
         if pendingRefresh then Bar.Refresh(false) end
     end)
