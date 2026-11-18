@@ -11,7 +11,8 @@ ns.SidePanel = SidePanel
 
 local WIDTH = 340
 local PAD = 14
-local DOCK_GAP = 4
+local DOCK_ORDER = 10
+local DOCK_SLOTS = { "auction", "bank" }
 local FREE_STRATA = "HIGH"
 local HOST_LEVEL_GAP = 10
 local HEADER_HEIGHT = 28
@@ -87,7 +88,7 @@ local function CreateGrip(panel, glyph, title)
     grip:SetHeight(HEADER_HEIGHT)
     grip:EnableMouse(true)
     grip:SetScript("OnMouseUp", function(_, button) panel:GetScript("OnMouseUp")(panel, button) end)
-    W.DragHandle(grip, function() panel:StartMoving() end, function() panel:EndDrag() end)
+    W.DragHandle(grip, function() panel:BeginDrag() end, function() panel:EndDrag() end)
     grip:SetScript("OnEnter", function(self) W.ShowHint(self, "HEADER_DESC") end)
     grip:SetScript("OnLeave", W.HideHint)
 end
@@ -172,30 +173,15 @@ local PanelMixin = {}
 
 function PanelMixin:Offset()
     local offset = self.offset
-    if not offset then return 0, 0 end
     return ns.db[offset.x], ns.db[offset.y]
 end
 
 function PanelMixin:Dock()
-    local host = self.host
-    local x, y = self:Offset()
-    self:ClearAllPoints()
-    if host then
-        self:SetPoint("TOPLEFT", host, "TOPRIGHT", DOCK_GAP + x, y)
-    else
-        self:SetPoint("RIGHT", UIParent, "RIGHT", -PAD + x, y)
-    end
-end
-
-local function VisibleHost(names)
-    for _, name in ipairs(names) do
-        local frame = _G[name]
-        if frame and frame:IsVisible() then return frame end
-    end
+    ns.Dock:Layout()
 end
 
 function PanelMixin:Layer()
-    local host = self.host
+    local host = ns.Dock:Host(self)
     if not host then
         self:SetFrameStrata(FREE_STRATA)
         return
@@ -204,12 +190,11 @@ function PanelMixin:Layer()
     self:SetFrameLevel(host:GetFrameLevel() + HOST_LEVEL_GAP)
 end
 
-function PanelMixin:Open(hosts)
+function PanelMixin:Open()
     if self.toggle then self.toggle:Refresh(false) end
-    self.host = VisibleHost(hosts)
     self:Layer()
-    self:Dock()
     UI.FadeIn(self, FADE_TIME)
+    self:Dock()
 end
 
 function PanelMixin:ListTop()
@@ -258,27 +243,37 @@ function PanelMixin:SetAction(text, enabled)
     SidePanel.SetEnabled(self.action, enabled)
 end
 
-local function SaveDragOffset(panel)
-    local host = panel.host
-    if not host then return end
-    local scale = panel:GetEffectiveScale()
-    local hostScale = host:GetEffectiveScale()
-    local x = (panel:GetLeft() * scale - host:GetRight() * hostScale) / scale - DOCK_GAP
-    local y = (panel:GetTop() * scale - host:GetTop() * hostScale) / scale
-    ns.Set(panel.offset.x, math.floor(x + 0.5))
-    ns.Set(panel.offset.y, math.floor(y + 0.5))
-    panel:Dock()
+local function Round(value)
+    return math.floor(value + 0.5)
+end
+
+function PanelMixin:BeginDrag()
+    self.dragLeft, self.dragTop = self:GetLeft(), self:GetTop()
+    self:StartMoving()
 end
 
 function PanelMixin:EndDrag()
     self:StopMovingOrSizing()
-    SaveDragOffset(self)
+    local x, y = self:Offset()
+    if self.dragLeft and self.dragTop then
+        ns.Set(self.offset.x, x + Round(self:GetLeft() - self.dragLeft))
+        ns.Set(self.offset.y, y + Round(self:GetTop() - self.dragTop))
+    end
+    self.dragLeft, self.dragTop = nil, nil
+    self:Dock()
 end
 
-local function MakeMovable(panel, offset)
+local function MakeMovable(panel, opts)
+    local offset = opts.offset
     panel.offset = offset
     panel:SetMovable(true)
     panel:SetClampedToScreen(true)
+    ns.Dock:Register(panel, {
+        addon = ns.ADDON,
+        slot = opts.slot,
+        hosts = opts.hosts,
+        offset = function() return panel:Offset() end,
+    })
     ns.Listen("SETTING_CHANGED", function(key)
         if panel:IsShown() and (key == nil or key == offset.x or key == offset.y) then panel:Dock() end
     end)
@@ -297,7 +292,7 @@ function SidePanel.Create(name, opts)
     if opts.toggle then CreateToggle(panel, opts.toggle) end
     CreateList(panel, opts)
     CreateFooter(panel, opts)
-    MakeMovable(panel, opts.offset)
+    MakeMovable(panel, opts)
     panel:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then
             ns.Options.Toggle(opts.settingsPage)
@@ -306,9 +301,30 @@ function SidePanel.Create(name, opts)
             ns.Set(opts.offset.y, 0)
         end
     end)
-    W.DragHandle(panel, function() panel:StartMoving() end, function() panel:EndDrag() end)
+    W.DragHandle(panel, function() panel:BeginDrag() end, function() panel:EndDrag() end)
     return panel
 end
+
+function SidePanel.Placement(slot)
+    return ns.db.dock[slot]
+end
+
+function SidePanel.SetPlacement(slot, target, side)
+    if target == nil then
+        ns.db.dock[slot] = nil
+    else
+        ns.db.dock[slot] = { target = target, side = side, at = time() }
+    end
+    ns.Dock:Changed()
+end
+
+ns.Listen("DB_READY", function()
+    ns.Dock:Join(ns.ADDON, { order = DOCK_ORDER, slots = DOCK_SLOTS, placement = SidePanel.Placement })
+end)
+
+ns.Listen("SETTING_CHANGED", function(key)
+    if key == nil then ns.Dock:Changed() end
+end)
 
 local function ShowRowTooltip(head)
     local row = head:GetParent()

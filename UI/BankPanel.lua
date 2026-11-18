@@ -62,6 +62,8 @@ local function Create()
         onAction = function() Bank.Take() end,
         actionHint = "BANK_TAKE_ALL_DESC",
         toggle = { key = "bankAuto", label = "BANK_AUTO", desc = "BANK_AUTO_DESC" },
+        hosts = HOSTS,
+        slot = "bank",
         offset = { x = "bankX", y = "bankY" },
         settingsPage = "bank",
     })
@@ -78,7 +80,7 @@ ns.Listen("BANK_SHOWN", function(open)
     end
     if not panel then Create() end
     Paint()
-    panel:Open(HOSTS)
+    panel:Open()
 end)
 
 ns.Listen("BANK_CHANGED", function()

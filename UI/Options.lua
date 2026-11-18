@@ -80,6 +80,24 @@ local function AddParagraph(page, key, gap)
     return page.stack:Add(W.Paragraph(page.content, PAGE_WIDTH, key), gap or PARAGRAPH_GAP)
 end
 
+local function AddLiveText(page, build, color, gap)
+    local frame = CreateFrame("Frame", nil, page.content)
+    frame:SetWidth(PAGE_WIDTH)
+    local text = UI.Text(frame, T.label, color)
+    text:SetPoint("TOPLEFT")
+    text:SetWidth(PAGE_WIDTH)
+    text:SetWordWrap(true)
+    text:SetJustifyH("LEFT")
+    text:SetSpacing(3)
+    function frame:Refresh()
+        text:SetText(build())
+        self:SetHeight(math.floor(text:GetStringHeight() + 4))
+    end
+    frame:Refresh()
+    page.stack:Add(Track(page, frame), gap)
+    return frame
+end
+
 local function NewPage(id)
     local scroll = W.Scroll(window.body)
     scroll:SetAllPoints(window.body)
@@ -276,6 +294,103 @@ local function BuildScrolls()
     ns.Listen("STATUS_CHANGED", RepaintIfVisible)
 end
 
+local AUTO = "auto"
+local DOCK_SIDE_GAP, DOCK_TEXT_GAP = 10, 8
+local DOCK_PAGES = { "auction", "bank" }
+
+local function DockPlacement(slot)
+    return ns.SidePanel.Placement(slot)
+end
+
+local function DockTargets(slot)
+    local items = {
+        { value = AUTO, text = L.DOCK_AUTO },
+        { value = ns.Dock.HOST, text = L["DOCK_HOST_" .. slot] },
+    }
+    for _, name in ipairs(ns.Dock:Family(slot)) do
+        if name ~= ns.ADDON and ns.Dock:CanAttach(ns.ADDON, slot, name) then
+            items[#items + 1] = { value = name, text = name }
+        end
+    end
+    return items
+end
+
+local function DefaultSide(target)
+    return target == ns.Dock.HOST and "RIGHT" or "BELOW"
+end
+
+local function SetDockTarget(slot, target)
+    if target == AUTO then
+        ns.SidePanel.SetPlacement(slot, nil)
+        return
+    end
+    local placement = DockPlacement(slot)
+    ns.SidePanel.SetPlacement(slot, target, placement and placement.side or DefaultSide(target))
+end
+
+local function SetDockSide(slot, side)
+    local placement = DockPlacement(slot)
+    if placement then ns.SidePanel.SetPlacement(slot, placement.target, side) end
+end
+
+local function DockStatus(slot)
+    local parent, side, takenBy = ns.Dock:Place(ns.ADDON, slot)
+    if not parent then return "" end
+    local where = parent == ns.Dock.HOST and L["DOCK_OF_" .. slot] or parent
+    local text = string.format(L["DOCK_NOW_" .. side], where)
+    if takenBy then text = text .. "\n" .. string.format(L.DOCK_TAKEN, takenBy) end
+    return text
+end
+
+local function DockFamily(slot)
+    return string.format(L.DOCK_EXPLAIN, table.concat(ns.Dock:Family(slot), ", "))
+end
+
+local function DockSides()
+    local list = {}
+    for index, side in ipairs(ns.Dock.SIDES) do
+        list[index] = { value = side, text = L["DOCK_SIDE_" .. side] }
+    end
+    return list
+end
+
+local function AddDockControls(page, slot)
+    page.stack:Add(Track(page, W.Choices(page.content, PAGE_WIDTH, {
+        label = "DOCK_TARGET",
+        items = function() return DockTargets(slot) end,
+        get = function()
+            local placement = DockPlacement(slot)
+            return placement and placement.target or AUTO
+        end,
+        set = function(target) SetDockTarget(slot, target) end,
+    })))
+    local sides = page.stack:Add(Track(page, W.Segmented(page.content, PAGE_WIDTH, {
+        label = "DOCK_SIDE",
+        count = #ns.Dock.SIDES,
+        items = DockSides,
+        get = function()
+            local placement = DockPlacement(slot)
+            return placement and placement.side
+        end,
+        set = function(side) SetDockSide(slot, side) end,
+    })), DOCK_SIDE_GAP)
+    local status = AddLiveText(page, function() return DockStatus(slot) end, C.text, DOCK_TEXT_GAP)
+    local paintStatus = status.Refresh
+    function status:Refresh()
+        sides:SetShown(DockPlacement(slot) ~= nil)
+        paintStatus(self)
+    end
+    status:Refresh()
+    AddLiveText(page, function() return DockFamily(slot) end, C.muted, PARAGRAPH_GAP)
+end
+
+ns.Dock:OnChange(function()
+    for _, id in ipairs(DOCK_PAGES) do
+        local page = pages[id]
+        if page and IsCurrent(page) then RefreshPage(page, true) end
+    end
+end)
+
 local function BuildAuction()
     local page = NewPage("auction")
     AddHeading(page, "SECTION_AUCTION")
@@ -288,6 +403,7 @@ local function BuildAuction()
     AddParagraph(page, "PRICE_STEP_EXPLAIN", 6)
 
     AddHeading(page, "SECTION_PLACEMENT")
+    AddDockControls(page, "auction")
     AddSlider(page, "auctionX", "OFFSET_X", -PANEL_OFFSET, PANEL_OFFSET)
     AddSlider(page, "auctionY", "OFFSET_Y", -PANEL_OFFSET, PANEL_OFFSET)
     AddParagraph(page, "AUCTION_OFFSET_EXPLAIN", 6)
@@ -300,6 +416,7 @@ local function BuildBank()
     AddToggle(page, "bankAuto", "BANK_AUTO", "BANK_AUTO_DESC")
 
     AddHeading(page, "SECTION_PLACEMENT")
+    AddDockControls(page, "bank")
     AddSlider(page, "bankX", "OFFSET_X", -PANEL_OFFSET, PANEL_OFFSET)
     AddSlider(page, "bankY", "OFFSET_Y", -PANEL_OFFSET, PANEL_OFFSET)
     AddParagraph(page, "BANK_OFFSET_EXPLAIN", 6)

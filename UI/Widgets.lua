@@ -14,6 +14,7 @@ local MOVE_TIME = 0.18
 local ROW_HEIGHT = 24
 local SWITCH_WIDTH, SWITCH_HEIGHT, KNOB_INSET = 26, 14, 2
 local BUTTON_HEIGHT, BUTTON_PAD, GROUP_GAP = 22, 10, 2
+local CHOICE_MARK_WIDTH = 2
 local THUMB_SIZE, THUMB_HOVER_SIZE, RAIL_HEIGHT = 10, 12, 3
 local ROW_HOVER = { 1, 1, 1, 0.035 }
 local LOCKED_ALPHA = 0.5
@@ -458,6 +459,67 @@ function Widgets.Segmented(parent, width, opts)
     return row
 end
 
+function Widgets.Choices(parent, width, opts)
+    local frame = CreateFrame("Frame", nil, parent)
+    frame:SetWidth(width)
+    local top = 0
+    if opts.label then
+        local label = UI.Text(frame, T.label, C.muted)
+        label:SetPoint("TOPLEFT", 0, -2)
+        Widgets.Bind(label, opts.label)
+        top = 18
+    end
+    local buttons = {}
+
+    local function Choice(index)
+        local button = buttons[index]
+        if button then return button end
+        button = CreateFrame("Button", nil, frame)
+        button:SetSize(width, BUTTON_HEIGHT)
+        button:SetPoint("TOPLEFT", 0, -(top + (index - 1) * (BUTTON_HEIGHT + GROUP_GAP)))
+        local fill = button:CreateTexture(nil, "BACKGROUND")
+        fill:SetAllPoints()
+        Widgets.HoverFill(button, fill, C.control, C.controlHover)
+        button.mark = button:CreateTexture(nil, "ARTWORK")
+        button.mark:SetColorTexture(unpack(C.accent))
+        button.mark:SetPoint("TOPLEFT")
+        button.mark:SetPoint("BOTTOMLEFT")
+        button.mark:SetWidth(CHOICE_MARK_WIDTH)
+        button.text = UI.Text(button, T.label, C.text)
+        button.text:SetPoint("LEFT", BUTTON_PAD, 0)
+        button.text:SetPoint("RIGHT", -BUTTON_PAD, 0)
+        button.text:SetJustifyH("LEFT")
+        button:SetScript("OnClick", function(self)
+            opts.set(self.item.value)
+            frame:Refresh()
+        end)
+        buttons[index] = button
+        return button
+    end
+
+    function frame:Refresh()
+        local items = opts.items()
+        local current = opts.get()
+        for index, item in ipairs(items) do
+            local button = Choice(index)
+            local chosen = item.value == current
+            button.item = item
+            button.text:SetText(item.text)
+            button.text:SetTextColor(unpack(chosen and C.accent or C.text))
+            button.mark:SetShown(chosen)
+            button:Show()
+        end
+        for index = #items + 1, #buttons do
+            buttons[index]:Hide()
+        end
+        self:SetHeight(top + #items * (BUTTON_HEIGHT + GROUP_GAP) - GROUP_GAP)
+    end
+
+    Widgets.OnLocale(function() frame:Refresh() end)
+    frame:Refresh()
+    return frame
+end
+
 function Widgets.Scroll(parent)
     local scroll = CreateFrame("ScrollFrame", nil, parent)
     scroll:EnableMouseWheel(true)
@@ -532,6 +594,8 @@ function Widgets.Stack(content, inset)
         frame.stackGap = gap or 0
         self.frames[#self.frames + 1] = frame
         frame:HookScript("OnSizeChanged", Reflow)
+        frame:HookScript("OnShow", Reflow)
+        frame:HookScript("OnHide", Reflow)
         self:Reflow()
         return frame
     end

@@ -19,6 +19,7 @@ local DEFAULTS = {
     auctionY = 0,
     bankX = 0,
     bankY = 0,
+    dock = {},
     bank = true,
     bankAuto = false,
     iconSize = 36,

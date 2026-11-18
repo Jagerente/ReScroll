@@ -59,7 +59,7 @@ When you open the auction house, a panel next to it lists the scrolls you are sh
 
 When you open the bank, a panel next to it lists the scrolls your bags are short of and how many of them are in the bank. **Take all** moves them into your bags, the best rank first and only ranks the stock counts, splitting stacks so you get exactly the stock. Each row has its own **Take** button. Turn on "Take them right away" to skip the click.
 
-Both panels sit to the right of their window and follow it, also when a bag addon such as EllesmereUI replaces the bank window. Drag a panel to move it, or set its offsets in the settings; right-click a panel to open or close its settings, middle-click to put it back.
+Both panels sit to the right of their window and follow it, also when a bag addon such as EllesmereUI replaces the bank window. On the Auction and Bank tabs you can put the panel to the right, left, below or above the window. Drag a panel to move it, or set its offsets in the settings; right-click a panel to open or close its settings, middle-click to put it back.
 
 ![The bank panel next to the EllesmereUI bank window](https://raw.githubusercontent.com/Jagerente/ReScroll/main/branding/screenshots/bank.png)
 

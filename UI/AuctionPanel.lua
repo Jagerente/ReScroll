@@ -290,6 +290,8 @@ local function Create()
         empty = "AH_EMPTY",
         refresh = Market.Refresh,
         toggle = { key = "countBank", label = "COUNT_BANK", desc = "COUNT_BANK_DESC" },
+        hosts = HOSTS,
+        slot = "auction",
         offset = { x = "auctionX", y = "auctionY" },
         settingsPage = "auction",
     })
@@ -306,7 +308,7 @@ ns.Listen("MARKET_SHOWN", function(open)
     end
     if not panel then Create() end
     Paint()
-    panel:Open(HOSTS)
+    panel:Open()
 end)
 
 ns.Listen("MARKET_CHANGED", function()

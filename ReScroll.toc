@@ -9,6 +9,7 @@
 ## AddonCompartmentFunc: ReScroll_OnAddonCompartmentClick
 ## X-Curse-Project-ID: 1812247
 
+Libs\LibJagerenteDock\LibJagerenteDock.lua
 Core\Init.lua
 Core\Locales.lua
 Data\Scrolls.lua
