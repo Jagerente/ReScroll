@@ -29,6 +29,8 @@ local DISABLED_ALPHA = 0.4
 local FADE_TIME = 0.15
 local GOLD, SILVER = 10000, 100
 local HAIRLINE = { 1, 1, 1, 0.07 }
+local PERCENT = 100
+local OPAQUE_WINDOW = { C.window[1], C.window[2], C.window[3], 1 }
 local COINS = {
     { size = GOLD, key = "COIN_GOLD", color = "|cffe8c15a" },
     { size = SILVER, key = "COIN_SILVER", color = "|cffc4c9cf" },
@@ -73,6 +75,30 @@ function SidePanel.SetEnabled(button, enabled)
     button:SetEnabled(enabled)
     button:SetAlpha(enabled and 1 or DISABLED_ALPHA)
 end
+
+local backgrounds = {}
+
+local function BackgroundAlpha()
+    return ns.db.panelBackground / PERCENT
+end
+
+function SidePanel.AddBackground(parent, color)
+    local fill = UI.Fill(parent, color)
+    fill:SetAlpha(BackgroundAlpha())
+    backgrounds[#backgrounds + 1] = fill
+    return fill
+end
+
+local function PaintBackgrounds()
+    local alpha = BackgroundAlpha()
+    for _, fill in ipairs(backgrounds) do
+        fill:SetAlpha(alpha)
+    end
+end
+
+ns.Listen("SETTING_CHANGED", function(key)
+    if key == nil or key == "panelBackground" then PaintBackgrounds() end
+end)
 
 local function Hairline(parent)
     local line = parent:CreateTexture(nil, "ARTWORK")
@@ -287,7 +313,7 @@ function SidePanel.Create(name, opts)
     panel:EnableMouse(true)
     panel:Hide()
     panel.rows = {}
-    UI.Fill(panel, C.window)
+    panel.background = SidePanel.AddBackground(panel, OPAQUE_WINDOW)
     CreateHeader(panel, opts)
     if opts.toggle then CreateToggle(panel, opts.toggle) end
     CreateList(panel, opts)

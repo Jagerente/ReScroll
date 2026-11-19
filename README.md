@@ -69,7 +69,7 @@ Both panels sit to the right of their window and follow it, also when a bag addo
 `/scrolls` opens the settings:
 
 - **Scrolls:** which buffs to track and in what order (drag the rows), counting on the group, lower ranks, upgrades, scrolls you are out of, the refresh threshold, how many scrolls to keep
-- **Panel:** when it shows up, icon size, icons per row, spacing, which way it grows, the title line, scroll counts, lock
+- **Panel:** when it shows up, icon size, icons per row, spacing, which way it grows, the title line, scroll counts, lock, the background of the panel and of the auction and bank panels
 - **Auction:** the auction house list, counting the bank, the price jump guard, where the panel sits
 - **Bank:** the bank panel, taking scrolls from the bank right away, where the panel sits
 - **General:** the Apply key, minimap button, language

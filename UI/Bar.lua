@@ -35,7 +35,8 @@ local CONTROL_DELAY = 0.5
 local PULSE_ALPHA, PULSE_TIME, PULSE_LOOPS = 0.55, 0.35, 3
 local GLOW_OUTSET = 2
 local ROMAN = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII" }
-local BACKGROUND = { 0.078, 0.076, 0.072, 0.92 }
+local BACKGROUND = { 0.078, 0.076, 0.072 }
+local PERCENT = 100
 local ICON_BACK = { 0, 0, 0, 0.7 }
 local STRATA = "MEDIUM"
 
@@ -443,6 +444,10 @@ local function CreatePulse()
     end)
 end
 
+local function PaintBackground()
+    bar.background:SetAlpha(ns.db.barBackground / PERCENT)
+end
+
 local function Create()
     holder = CreateFrame("Frame", "ReScrollHolder", UIParent)
     holder:SetSize(1, 1)
@@ -455,7 +460,8 @@ local function Create()
     bar = CreateFrame("Frame", "ReScrollBar", holder)
     bar:Hide()
     bar:SetAlpha(0)
-    UI.Fill(bar, BACKGROUND)
+    bar.background = UI.Fill(bar, BACKGROUND)
+    PaintBackground()
     CreatePulse()
     CreateHeader()
     CreateApplyButton()
@@ -703,6 +709,7 @@ ns.Listen("OPTIONS_SHOWN", RefreshAnimated)
 ns.Listen("LOCALE_CHANGED", function() Bar.Refresh(false) end)
 ns.Listen("SETTING_CHANGED", function(key)
     if not holder then return end
+    if key == nil or key == "barBackground" then PaintBackground() end
     if key == nil or key == "position" or key == "grow" then
         if not InCombat() then PlaceHolder() end
     end

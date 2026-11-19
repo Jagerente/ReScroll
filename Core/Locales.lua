@@ -170,6 +170,10 @@ STRINGS.enUS = {
     MOVE_EXPLAIN = "Drag the title line or Alt-drag an icon to move the panel. Middle-click the title line puts the panel back.",
     RECENTER = "Move the panel back",
 
+    SECTION_BACKGROUND = "Background",
+    BAR_BACKGROUND = "Panel with buttons",
+    PANEL_BACKGROUND = "Auction and bank panels",
+
     SECTION_BEHAVIOR = "Behavior",
     ENABLE = "Show the panel",
     ENABLE_DESC = "Off: the addon only keeps track and shows nothing.",
@@ -366,6 +370,10 @@ STRINGS.ruRU = {
     LOCKED_DESC = "Панель больше нельзя передвинуть.",
     MOVE_EXPLAIN = "Панель двигается за строку заголовка или Alt+перетаскиванием иконки. Клик колёсиком по строке заголовка возвращает панель на место.",
     RECENTER = "Вернуть панель на место",
+
+    SECTION_BACKGROUND = "Фон",
+    BAR_BACKGROUND = "Панель с кнопками",
+    PANEL_BACKGROUND = "Панели у аукциона и банка",
 
     SECTION_BEHAVIOR = "Поведение",
     ENABLE = "Показывать панель",

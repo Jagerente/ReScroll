@@ -28,6 +28,8 @@ local DEFAULTS = {
     grow = "RIGHT",
     showHeader = true,
     showCounts = true,
+    barBackground = 92,
+    panelBackground = 98,
     locked = false,
     position = { point = "CENTER", x = 0, y = -160 },
     minimap = { hide = false, angle = 235 },
