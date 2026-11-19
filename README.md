@@ -84,3 +84,4 @@ Panels like this one for the other things you carry, with the same restock at th
 
 - [RePotion](https://www.curseforge.com/projects/1815534) gives you one button for health potions and one for mana potions, and restocks them ([GitHub](https://github.com/Jagerente/RePotion)).
 - [ReFood](https://www.curseforge.com/projects/1816338) eats and drinks the strongest food you carry, reminds you of Well Fed and restocks food at the vendor ([GitHub](https://github.com/Jagerente/ReFood)).
+- [ReReagent](https://www.curseforge.com/projects/1816458) counts the reagents your class spells use and restocks them at the vendor and from the bank ([GitHub](https://github.com/Jagerente/ReReagent)).
