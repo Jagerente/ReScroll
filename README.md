@@ -77,3 +77,10 @@ Both panels sit to the right of their window and follow it, also when a bag addo
 The preview switch at the top shows the panel with sample scrolls in every state.
 
 ![The Scrolls tab of the settings](https://raw.githubusercontent.com/Jagerente/ReScroll/main/branding/screenshots/settings.png)
+
+## Other Re addons
+
+Panels like this one for the other things you carry, with the same restock at the auction house and the bank:
+
+- [RePotion](https://www.curseforge.com/projects/1815534) gives you one button for health potions and one for mana potions, and restocks them ([GitHub](https://github.com/Jagerente/RePotion)).
+- [ReFood](https://www.curseforge.com/projects/1816338) eats and drinks the strongest food you carry, reminds you of Well Fed and restocks food at the vendor ([GitHub](https://github.com/Jagerente/ReFood)).
