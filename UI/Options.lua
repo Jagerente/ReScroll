@@ -103,7 +103,7 @@ local function NewPage(id)
     local scroll = W.Scroll(window.body)
     scroll:SetAllPoints(window.body)
     scroll:Hide()
-    local page = { id = id, scroll = scroll, content = scroll.content, widgets = {} }
+    local page = { id = id, scroll = scroll, content = scroll.content, widgets = {}, sections = {} }
     page.stack = W.Stack(page.content, CONTENT_INSET)
     pages[id] = page
     return page
@@ -123,127 +123,6 @@ end
 local function FamilySummary(family)
     if Inventory.TopUsableRank(family, UnitLevel("player")) then return "" end
     return string.format(L.FROM_LEVEL, family.ranks[1].level)
-end
-
-local function CreateFamilyRow(parent, list)
-    local row = CreateFrame("Button", nil, parent)
-    row:SetSize(PAGE_WIDTH, FAMILY_ROW_HEIGHT)
-    row:RegisterForDrag("LeftButton")
-    W.RowHover(row)
-    row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetSize(FAMILY_ICON_SIZE, FAMILY_ICON_SIZE)
-    row.icon:SetPoint("LEFT")
-    row.icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
-    row.switch = W.CreateSwitch(row)
-    row.switch:SetPoint("RIGHT")
-    row.status = UI.Text(row, T.label, C.muted)
-    row.status:SetPoint("RIGHT", row.switch, "LEFT", -12, 0)
-    row.status:SetJustifyH("RIGHT")
-    row.name = UI.Text(row, T.body, C.text)
-    row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
-    row.name:SetPoint("RIGHT", row.status, "LEFT", -8, 0)
-    row.name:SetJustifyH("LEFT")
-
-    function row:Paint(animate)
-        local family = self.family
-        self.icon:SetTexture(Catalog.Icon(family))
-        self.name:SetText(Catalog.Name(family))
-        self.status:SetText(FamilySummary(family))
-        W.SetSwitch(self.switch, Catalog.IsEnabled(family), animate)
-    end
-
-    row:SetScript("OnMouseDown", function(self) self.dragged = false end)
-    row:SetScript("OnClick", function(self)
-        if self.dragged then return end
-        Catalog.SetEnabled(self.family, not Catalog.IsEnabled(self.family))
-        self:Paint(true)
-    end)
-    row:HookScript("OnEnter", function(self)
-        W.SetSwitchHover(self.switch, true)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetItemByID(self.family.top.item)
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(L.FAMILY_ROW_DESC, unpack(C.muted))
-        GameTooltip:Show()
-    end)
-    row:HookScript("OnLeave", function(self)
-        W.SetSwitchHover(self.switch, false)
-        W.HideHint(self)
-    end)
-    row:SetScript("OnDragStart", function(self) list:BeginDrag(self) end)
-    row:SetScript("OnDragStop", function(self) list:EndDrag(self) end)
-    return row
-end
-
-local function CreateFamilyList(page)
-    local list = { rows = {} }
-    local dropLine = page.content:CreateTexture(nil, "OVERLAY")
-    dropLine:SetColorTexture(unpack(C.accent))
-    dropLine:SetHeight(DROP_LINE_HEIGHT)
-    dropLine:Hide()
-
-    local function CursorY()
-        local _, y = GetCursorPosition()
-        return y / page.content:GetEffectiveScale()
-    end
-
-    local function DropIndex()
-        local y = CursorY()
-        for index, row in ipairs(list.rows) do
-            local top, bottom = row:GetTop(), row:GetBottom()
-            if top and bottom and y > (top + bottom) / 2 then return index end
-        end
-        return #list.rows + 1
-    end
-
-    local function PlaceDropLine(index)
-        local anchor = list.rows[math.min(index, #list.rows)]
-        dropLine:ClearAllPoints()
-        local edge = index > #list.rows and "BOTTOM" or "TOP"
-        dropLine:SetPoint(edge .. "LEFT", anchor, edge .. "LEFT", 0, 0)
-        dropLine:SetPoint(edge .. "RIGHT", anchor, edge .. "RIGHT", 0, 0)
-    end
-
-    function list:BeginDrag(row)
-        row.dragged = true
-        row:SetAlpha(DRAG_ALPHA)
-        self.dropIndex = DropIndex()
-        PlaceDropLine(self.dropIndex)
-        dropLine:Show()
-        row:SetScript("OnUpdate", function()
-            local index = DropIndex()
-            if index ~= self.dropIndex then
-                self.dropIndex = index
-                PlaceDropLine(index)
-            end
-        end)
-    end
-
-    function list:EndDrag(row)
-        row:SetScript("OnUpdate", nil)
-        row:SetAlpha(1)
-        dropLine:Hide()
-        local from
-        for index, candidate in ipairs(self.rows) do
-            if candidate == row then from = index end
-        end
-        local to = self.dropIndex or from
-        if to > from then to = to - 1 end
-        if to ~= from then Catalog.Move(row.family.key, to) end
-    end
-
-    function list:Paint(animate)
-        for index, family in ipairs(Catalog.ordered) do
-            local row = self.rows[index]
-            row.family = family
-            row:Paint(animate)
-        end
-    end
-
-    for index = 1, #Catalog.ordered do
-        list.rows[index] = page.stack:Add(CreateFamilyRow(page.content, list), index == 1 and 2 or 0)
-    end
-    return list
 end
 
 local function AddLearnedButton(page)
@@ -270,11 +149,195 @@ local function FormatPercent(value)
     return string.format("%d%%", value)
 end
 
+local UTILITY_VISIBILITY_MODES = {
+    { value = "short", key = "UTILITY_VISIBILITY_short" },
+    { value = "always", key = "UTILITY_VISIBILITY_always" },
+    { value = "never", key = "UTILITY_VISIBILITY_never" },
+}
+
+local ROW_GAP, ROW_SLIDER_GAP = 8, 4
+local STOCK_STACKS = 2
+
+local function StockMax(family)
+    return family.top.stack * STOCK_STACKS
+end
+
+local function CreateRowHead(row, list)
+    local head = CreateFrame("Button", nil, row)
+    head:SetHeight(FAMILY_ROW_HEIGHT)
+    head:SetPoint("TOPLEFT")
+    head:SetPoint("TOPRIGHT")
+    W.RowHover(head)
+    row.icon = head:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(FAMILY_ICON_SIZE, FAMILY_ICON_SIZE)
+    row.icon:SetPoint("LEFT")
+    row.icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
+    row.switch = W.CreateSwitch(head)
+    row.switch:SetPoint("RIGHT")
+    row.status = UI.Text(head, T.label, C.muted)
+    row.status:SetPoint("RIGHT", row.switch, "LEFT", -12, 0)
+    row.status:SetJustifyH("RIGHT")
+    row.name = UI.Text(head, T.body, C.text)
+    row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
+    row.name:SetPoint("RIGHT", row.status, "LEFT", -8, 0)
+    row.name:SetJustifyH("LEFT")
+    head:SetScript("OnMouseDown", function() row.dragged = false end)
+    head:SetScript("OnClick", function()
+        if row.dragged then return end
+        Catalog.SetEnabled(row.family, not Catalog.IsEnabled(row.family))
+    end)
+    head:HookScript("OnEnter", function(self)
+        W.SetSwitchHover(row.switch, true)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetItemByID(row.family.top.item)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(L[list.hint], unpack(C.muted))
+        GameTooltip:Show()
+    end)
+    head:HookScript("OnLeave", function(self)
+        W.SetSwitchHover(row.switch, false)
+        W.HideHint(self)
+    end)
+    if list.BeginDrag then
+        head:RegisterForDrag("LeftButton")
+        head:SetScript("OnDragStart", function() list:BeginDrag(row) end)
+        head:SetScript("OnDragStop", function() list:EndDrag(row) end)
+    end
+    row.head = head
+end
+
+local function CreateScrollRow(list, family)
+    local row = CreateFrame("Frame", nil, list)
+    row:SetWidth(PAGE_WIDTH)
+    row.family = family
+    CreateRowHead(row, list)
+    row.stockOptions = {
+        label = "STOCK", min = 0, max = StockMax(family), step = 1,
+        get = function() return Inventory.StockTarget(row.family) end,
+        set = function(value) Inventory.SetStockTarget(row.family, value) end,
+    }
+    local indent = FAMILY_ICON_SIZE + 8
+    row.slider = W.Slider(row, PAGE_WIDTH - indent, row.stockOptions)
+    row.slider:SetPoint("TOPLEFT", row, "TOPLEFT", indent, -(FAMILY_ROW_HEIGHT + ROW_SLIDER_GAP))
+    return row
+end
+
+local function PaintScrollRow(row, animate)
+    local family = row.family
+    local enabled = Catalog.IsEnabled(family)
+    row.icon:SetTexture(Catalog.Icon(family))
+    row.icon:SetDesaturated(not enabled)
+    row.name:SetText(Catalog.Name(family))
+    row.name:SetTextColor(unpack(enabled and C.text or C.muted))
+    row.status:SetText(FamilySummary(family))
+    W.SetSwitch(row.switch, enabled, animate)
+    row.stockOptions.max = StockMax(family)
+    row.slider:SetShown(enabled)
+    row.slider:Refresh()
+    local height = FAMILY_ROW_HEIGHT
+    if enabled then height = height + ROW_SLIDER_GAP + row.slider:GetHeight() end
+    row:SetHeight(height)
+end
+
+local function EnableReorder(list)
+    local dropLine = list:CreateTexture(nil, "OVERLAY")
+    dropLine:SetColorTexture(unpack(C.accent))
+    dropLine:SetHeight(DROP_LINE_HEIGHT)
+    dropLine:Hide()
+
+    local function DropIndex()
+        local _, y = GetCursorPosition()
+        y = y / list:GetEffectiveScale()
+        for index = 1, #list.families do
+            local row = list.rows[index]
+            local top, bottom = row:GetTop(), row:GetBottom()
+            if top and bottom and y > (top + bottom) / 2 then return index end
+        end
+        return #list.families + 1
+    end
+
+    local function PlaceDropLine(index)
+        local last = #list.families
+        local anchor = list.rows[math.min(index, last)]
+        local edge = index > last and "BOTTOM" or "TOP"
+        local lift = index > last and -ROW_GAP / 2 or ROW_GAP / 2
+        dropLine:ClearAllPoints()
+        dropLine:SetPoint(edge .. "LEFT", anchor, edge .. "LEFT", 0, lift)
+        dropLine:SetPoint(edge .. "RIGHT", anchor, edge .. "RIGHT", 0, lift)
+    end
+
+    function list:BeginDrag(row)
+        row.dragged = true
+        row:SetAlpha(DRAG_ALPHA)
+        self.dropIndex = DropIndex()
+        PlaceDropLine(self.dropIndex)
+        dropLine:Show()
+        row:SetScript("OnUpdate", function()
+            local index = DropIndex()
+            if index ~= self.dropIndex then
+                self.dropIndex = index
+                PlaceDropLine(index)
+            end
+        end)
+    end
+
+    function list:EndDrag(row)
+        row:SetScript("OnUpdate", nil)
+        row:SetAlpha(1)
+        dropLine:Hide()
+        local from
+        for index = 1, #self.families do
+            if self.rows[index] == row then from = index end
+        end
+        local to = self.dropIndex or from
+        if to > from then to = to - 1 end
+        if to ~= from then Catalog.Move(row.family.key, to) end
+    end
+end
+
+local function AddScrollList(page, families, hint, reorder)
+    local list = CreateFrame("Frame", nil, page.content)
+    list:SetWidth(PAGE_WIDTH)
+    list.rows, list.families, list.hint = {}, families, hint
+    if reorder then EnableReorder(list) end
+    function list:Refresh(animate)
+        local y = 0
+        for index, family in ipairs(families) do
+            local row = self.rows[index] or CreateScrollRow(self, family)
+            self.rows[index] = row
+            local same = row.family == family
+            row.family = family
+            PaintScrollRow(row, animate and same)
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", 0, -y)
+            row:Show()
+            y = y + row:GetHeight() + ROW_GAP
+        end
+        for index = #families + 1, #self.rows do
+            self.rows[index]:Hide()
+        end
+        self:SetHeight(math.max(1, y - ROW_GAP))
+    end
+    list:Refresh(false)
+    page.stack:Add(Track(page, list), 2)
+    return list
+end
+
+local function AddUtilitySection(page)
+    page.sections.utility = AddHeading(page, "SECTION_UTILITY")
+    AddParagraph(page, "UTILITY_EXPLAIN", 0)
+    local list = AddScrollList(page, Catalog.utilities, "UTILITY_ROW_DESC")
+    AddSegmented(page, "utilityVisibility", "UTILITY_VISIBILITY", UTILITY_VISIBILITY_MODES, SECTION_GAP)
+    AddParagraph(page, "UTILITY_VISIBILITY_EXPLAIN", 6)
+    page.stack:Add(W.Button(page.content, "UTILITY_RECENTER", function() ns.UtilityBar.ResetPosition() end), 12)
+    return list
+end
+
 local function BuildScrolls()
     local page = NewPage("scrolls")
     AddHeading(page, "SECTION_FAMILIES")
     AddParagraph(page, "FAMILIES_EXPLAIN", 0)
-    local list = CreateFamilyList(page)
+    local list = AddScrollList(page, Catalog.ordered, "FAMILY_ROW_DESC", true)
 
     AddHeading(page, "SECTION_RULES")
     AddToggle(page, "groupBuffs", "GROUP_BUFFS", "GROUP_BUFFS_DESC")
@@ -282,17 +345,17 @@ local function BuildScrolls()
     AddToggle(page, "upgrades", "UPGRADES", "UPGRADES_DESC")
     AddToggle(page, "showEmpty", "SHOW_EMPTY", "SHOW_EMPTY_DESC")
     AddSlider(page, "expireMinutes", "EXPIRE_MINUTES", 0, 15, nil, 10)
-    AddSlider(page, "stock", "STOCK", 0, 20)
     AddLearnedButton(page)
+    local utilities = #Catalog.utilities > 0 and AddUtilitySection(page)
 
-    function page:OnShow()
-        list:Paint(false)
+    local function RefreshIfVisible()
+        if not IsCurrent(page) then return end
+        list:Refresh(true)
+        if utilities then utilities:Refresh(true) end
     end
-    local function RepaintIfVisible()
-        if IsCurrent(page) then list:Paint(true) end
+    for _, message in ipairs({ "FAMILIES_CHANGED", "STATUS_CHANGED", "STOCK_CHANGED", "NAMES_CHANGED" }) do
+        ns.Listen(message, RefreshIfVisible)
     end
-    ns.Listen("FAMILIES_CHANGED", RepaintIfVisible)
-    ns.Listen("STATUS_CHANGED", RepaintIfVisible)
 end
 
 local AUTO = "auto"
@@ -557,7 +620,14 @@ local function MoveUnderline(button, animate)
     end)
 end
 
-local function ShowPage(id, animate)
+local function SectionOffset(page, section)
+    local frame = section and page.sections[section]
+    if not frame then return 0 end
+    local _, _, _, _, y = frame:GetPoint(1)
+    return -(y or 0)
+end
+
+local function ShowPage(id, animate, section)
     if not FindTab(id) then id = DEFAULT_PAGE end
     local page = pages[id]
     if not page then
@@ -569,7 +639,7 @@ local function ShowPage(id, animate)
     end
     currentPage = page
     RefreshPage(page)
-    page.scroll:ScrollTo(0, false)
+    page.scroll:ScrollTo(SectionOffset(page, section), false)
     if animate then
         UI.FadeIn(page.scroll, 0.14)
     else
@@ -765,7 +835,7 @@ function Options.IsOpen()
     return window ~= nil and window:IsShown()
 end
 
-function Options.Open(pageId)
+function Options.Open(pageId, section)
     if not window then CreateWindow() end
     window.closeAnimation:Stop()
     if not window:IsShown() then
@@ -777,7 +847,7 @@ function Options.Open(pageId)
         end
         ns.Fire("OPTIONS_SHOWN", true)
     end
-    ShowPage(pageId or currentPage and currentPage.id or ns.db.lastPage or DEFAULT_PAGE, false)
+    ShowPage(pageId or currentPage and currentPage.id or ns.db.lastPage or DEFAULT_PAGE, false, section)
 end
 
 function Options.Close()
@@ -786,11 +856,11 @@ function Options.Close()
     window.closeAnimation:Restart()
 end
 
-function Options.Toggle(pageId)
+function Options.Toggle(pageId, section)
     if window and window:IsShown() and (not pageId or currentPage == pages[pageId]) then
         Options.Close()
     else
-        Options.Open(pageId)
+        Options.Open(pageId, section)
     end
 end
 

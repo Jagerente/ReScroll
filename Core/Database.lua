@@ -11,7 +11,6 @@ local DEFAULTS = {
     upgrades = true,
     groupBuffs = true,
     showEmpty = true,
-    stock = 5,
     countBank = true,
     auction = true,
     priceStep = 20,
@@ -32,6 +31,8 @@ local DEFAULTS = {
     panelBackground = 98,
     locked = false,
     position = { point = "CENTER", x = 0, y = -160 },
+    utilityVisibility = "short",
+    utilityPosition = { point = "CENTER", x = 0, y = -320 },
     minimap = { hide = false, angle = 235 },
     learned = {},
 }
@@ -42,6 +43,8 @@ local CHAR_DEFAULTS = {
     stockOverride = {},
     buyRanks = {},
 }
+
+local RETIRED = { "stock" }
 
 ns.DEFAULTS = DEFAULTS
 
@@ -56,8 +59,13 @@ local function ApplyDefaults(target, defaults)
     return target
 end
 
+local function DropRetired(db)
+    for _, key in ipairs(RETIRED) do db[key] = nil end
+    return db
+end
+
 ns.Listen("INIT", function()
-    ReScrollDB = ApplyDefaults(ReScrollDB or {}, DEFAULTS)
+    ReScrollDB = ApplyDefaults(DropRetired(ReScrollDB or {}), DEFAULTS)
     ReScrollCharDB = ApplyDefaults(ReScrollCharDB or {}, CHAR_DEFAULTS)
     ns.db = ReScrollDB
     ns.charDB = ReScrollCharDB

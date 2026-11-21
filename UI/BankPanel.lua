@@ -26,7 +26,7 @@ end
 local function PaintRow(row)
     local entry = row.entry
     row.icon:SetTexture(Catalog.Icon(entry.family, entry.rank))
-    row.name:SetText(SidePanel.ScrollName(entry.family, entry.rank))
+    row.name:SetText(Catalog.RankName(entry.family, entry.rank))
     if Bank.moving then
         row.detail:SetText(L.BANK_MOVING)
         row.detail:SetTextColor(unpack(C.accent))

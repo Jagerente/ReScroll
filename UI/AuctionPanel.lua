@@ -256,7 +256,7 @@ local function PaintRow(row, fresh)
     local entry = row.entry
     local rank = ShownRank(entry)
     row.icon:SetTexture(Catalog.Icon(entry.family, rank))
-    row.name:SetText(rank and SidePanel.ScrollName(entry.family, rank) or Catalog.Name(entry.family))
+    row.name:SetText(rank and Catalog.RankName(entry.family, rank) or Catalog.Name(entry.family))
     local text, color = Detail(entry)
     row.detail:SetText(text)
     row.detail:SetTextColor(unpack(color))

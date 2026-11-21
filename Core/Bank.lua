@@ -73,7 +73,7 @@ end
 local function Rebuild()
     wipe(entries)
     local level = UnitLevel("player")
-    for _, family in ipairs(Catalog.ordered) do
+    for _, family in ipairs(Catalog.restocked) do
         if Inventory.Restockable(family, level) then
             local grade = Inventory.StockRank(family, level)
             local have, inBank = Inventory.StockCount(family, grade)

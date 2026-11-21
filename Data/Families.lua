@@ -9,12 +9,24 @@ ns.FAMILIES = {
     { key = "strength", classes = { "WARRIOR", "PALADIN", "ROGUE", "SHAMAN", "DRUID" } },
     { key = "intellect", classes = { "PALADIN", "HUNTER", "PRIEST", "SHAMAN", "MAGE", "WARLOCK", "DRUID" }, coveredBy = "intellect" },
     { key = "spirit", classes = { "PALADIN", "PRIEST", "SHAMAN", "MAGE", "DRUID" }, coveredBy = "divineSpirit" },
-    { key = "endlessFortitude", classes = {} },
+    { key = "familiar", classes = { "MAGE" }, label = "FAMILIAR" },
     { key = "arcaneAccuracy", classes = {} },
     { key = "arcanePower", classes = {} },
     { key = "arcaneFire", classes = {} },
     { key = "arcaneFrost", classes = {} },
     { key = "arcaneRecovery", classes = {} },
+}
+
+ns.UTILITIES = {
+    { key = "liminalPassage" },
+    { key = "reintegration" },
+    { key = "unlocking" },
+    { key = "minorEvocation" },
+    { key = "polymorph" },
+    { key = "confuseBeast" },
+    { key = "rebukeElemental" },
+    { key = "cryoblast" },
+    { key = "comprehension" },
 }
 
 ns.BUFF_PROVIDERS = {

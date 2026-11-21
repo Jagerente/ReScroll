@@ -218,7 +218,7 @@ for _, message in ipairs({ "AURAS_CHANGED", "INVENTORY_CHANGED", "GROUP_CHANGED"
 end
 
 local STATUS_SETTINGS = {
-    expireMinutes = true, lowerRanks = true, upgrades = true, groupBuffs = true, showEmpty = true, stock = true,
+    expireMinutes = true, lowerRanks = true, upgrades = true, groupBuffs = true, showEmpty = true,
 }
 
 ns.Listen("SETTING_CHANGED", function(key)

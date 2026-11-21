@@ -9,18 +9,22 @@ Shows which scroll buffs you are missing in WoW Forever, makes them easy to appl
 ## What it tracks
 
 - Scroll of Stamina, Protection, Agility, Strength, Intellect and Spirit, all four ranks
-- Forever scrolls: Endless Fortitude and the Arcane scrolls (off by default, switch them on per character)
+- Mage familiars: Rat, Frog and Cat Familiar, +2, +6 and +12 Intellect for an hour
+- Forever's Arcane scrolls for mages (off by default, switch them on per character)
+
+Scrolls only one class can use, like the familiars and the Arcane scrolls for mages, are listed only for that class.
 
 Each character gets its own set. Stamina and Protection are on for every class, the rest depends on the class:
 
 - Warrior and rogue: Agility, Strength
 - Hunter: Agility, Intellect
 - Paladin: Strength, Intellect, Spirit
-- Priest and mage: Intellect, Spirit
+- Priest: Intellect, Spirit
+- Mage: Intellect, Spirit, Familiar
 - Warlock: Intellect
 - Shaman and druid: all four
 
-Switch any scroll on or off on the Scrolls tab of the settings.
+Switch any scroll on or off on the Scrolls tab of the settings. Each scroll you switch on gets its own "Keep in bags" slider: one stack (5) by default, up to two stacks.
 
 ## How it decides
 
@@ -43,9 +47,19 @@ Stacking rules come from the server and may differ from Classic. When a scroll b
 
 The panel shows up out of combat when something is missing: always (the default), in a group (and in any dungeon or raid), or only on a ready check. On a ready check it also shows up for 40 seconds and flashes.
 
+## Utility scrolls
+
+Mages have scrolls that are not buffs: you use them when the moment comes. Teleport to a party member resting at an inn (Liminal Passage), bring a dead player back (Reintegration), open a lock (Khadgar's Unlocking), turn a target into a melon or hit a group with Cryoblast. Other classes don't see this section.
+
+Switch on the ones you carry at the bottom of the Scrolls tab and set how many to keep, the same as for buff scrolls. A second small panel shows how many you have: amber below the stock, red at 0. By default it shows only the scrolls you are short of and hides when you have enough of all; you can also show it always or never.
+
+- Click an icon to use the scroll, the same as right-clicking it in your bags. Khadgar's Unlocking turns the cursor into a lockpick: click the chest, door or lockbox next. Polymorph goes on your target.
+- Right-click an icon to open its settings. Drag the title line or Alt-drag an icon to move the panel.
+- The bank panel takes them up to the stock, and the auction house panel buys the ones that can be traded. Polymorph, Confuse Beast and Rebuke Elemental bind when picked up, so they never show up on the auction house.
+
 ## Auction house
 
-When you open the auction house, a panel next to it lists the scrolls you are short of, up to the stock you keep (5 of each by default). Scrolls in the bank count toward it; switch off "Count scrolls in the bank" right in the panel to buy the full stock for your bags. Buffs you cast yourself are left out.
+When you open the auction house, a panel next to it lists the scrolls you are short of, up to the stock you keep for each scroll (5 by default). Scrolls in the bank count toward it; switch off "Count scrolls in the bank" right in the panel to buy the full stock for your bags. Buffs you cast yourself are left out.
 
 - The strongest rank on sale is chosen by default. Under each scroll all four ranks are listed with their bonus and price per scroll; click another rank to buy it instead, and your pick is remembered. Ranks above your level, switched off or not for sale are shown locked. Hover a rank for how many are on sale at that price and what comes after.
 - The stock counts the rank you buy and higher ones. With 2 scrolls of rank IV and 3 of rank III you keep 2 of 5 rank IV scrolls, and the panel offers 3 more of rank IV. Pick rank III instead and the same bags hold 5 of 5.
@@ -68,7 +82,7 @@ Both panels sit to the right of their window and follow it, also when a bag addo
 
 `/scrolls` opens the settings:
 
-- **Scrolls:** which buffs to track and in what order (drag the rows), counting on the group, lower ranks, upgrades, scrolls you are out of, the refresh threshold, how many scrolls to keep
+- **Scrolls:** which buffs to track and in what order (drag the rows), counting on the group, how many of each to keep, lower ranks, upgrades, scrolls you are out of, the refresh threshold, the utility scrolls and when their panel shows up
 - **Panel:** when it shows up, icon size, icons per row, spacing, which way it grows, the title line, scroll counts, lock, the background of the panel and of the auction and bank panels
 - **Auction:** the auction house list, counting the bank, the price jump guard, where the panel sits
 - **Bank:** the bank panel, taking scrolls from the bank right away, where the panel sits

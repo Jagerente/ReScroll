@@ -16,7 +16,7 @@ end
 
 local function Recount()
     local changed = false
-    for _, family in ipairs(ns.FAMILIES) do
+    for _, family in ipairs(Catalog.all) do
         for _, rank in ipairs(family.ranks) do
             local item = rank.item
             local inBags = GetItemCount(item, false) or 0
@@ -63,7 +63,12 @@ function Inventory.Cooldown(item)
 end
 
 function Inventory.StockTarget(family)
-    return ns.charDB.stockOverride[family.key] or ns.db.stock
+    return ns.charDB.stockOverride[family.key] or family.top.stack
+end
+
+function Inventory.SetStockTarget(family, value)
+    ns.charDB.stockOverride[family.key] = value
+    ns.Fire("STOCK_CHANGED")
 end
 
 function Inventory.TopUsableRank(family, level)
@@ -131,11 +136,15 @@ function Inventory.Restockable(family, level)
     return top and not CastsItself(family, top) and top or nil
 end
 
+function Inventory.IsShort(family)
+    return Inventory.StockCount(family) < Inventory.StockTarget(family)
+end
+
 function Inventory.GetShoppingList(out)
     wipe(out)
     local level = UnitLevel("player")
-    for _, family in ipairs(Catalog.ordered) do
-        if Inventory.Restockable(family, level) then
+    for _, family in ipairs(Catalog.restocked) do
+        if family.top.tradeable and Inventory.Restockable(family, level) then
             local ranks = Inventory.OfferRanks(family, level, {})
             local stocks = {}
             for index, rank in ipairs(ranks) do

@@ -467,14 +467,16 @@ local function Resettle()
     Changed()
 end
 
-local REBUILD_SETTINGS = { stock = true, lowerRanks = true, countBank = true }
+local REBUILD_SETTINGS = { lowerRanks = true, countBank = true }
 
 ns.Listen("INVENTORY_CHANGED", function()
     if Market.open then Market.Rebuild() end
 end)
-ns.Listen("FAMILIES_CHANGED", function()
-    if Market.open then Market.Rebuild() end
-end)
+for _, message in ipairs({ "FAMILIES_CHANGED", "STOCK_CHANGED" }) do
+    ns.Listen(message, function()
+        if Market.open then Market.Rebuild() end
+    end)
+end
 ns.Listen("SETTING_CHANGED", function(key)
     if not Market.open then return end
     if key == "auction" and not ns.db.auction then

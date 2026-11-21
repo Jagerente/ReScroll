@@ -404,9 +404,3 @@ function SidePanel.NewRow(panel, onButton, tooltipItem)
     W.RowHover(head)
     return row
 end
-
-function SidePanel.ScrollName(family, rank)
-    local name = ns.Catalog.Name(family)
-    if #family.ranks > 1 then name = name .. " " .. ns.Bar.RomanRank(rank) end
-    return name
-end
