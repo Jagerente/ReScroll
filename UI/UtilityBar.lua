@@ -2,11 +2,9 @@ local _, ns = ...
 
 local UI = ns.UI
 local L = ns.L
-local C = UI.COLORS
 local Catalog = ns.Catalog
 local Inventory = ns.Inventory
 local FloatingBar = ns.FloatingBar
-local TooltipLine = ns.Widgets.TooltipLine
 
 local UtilityBar = {}
 ns.UtilityBar = UtilityBar
@@ -23,22 +21,20 @@ local barFade = {}
 local pendingRefresh = false
 
 local function UsedRank(family)
-    local top = Inventory.TopUsableRank(family, UnitLevel("player")) or family.top
-    for index = top.index, 1, -1 do
-        local rank = family.ranks[index]
-        if Inventory.Count(rank.item) > 0 then return rank end
-    end
-    return top
+    local level = UnitLevel("player")
+    return Inventory.OwnedRank(family, level, true) or Inventory.TopUsableRank(family, level) or family.top
 end
 
-local function ShowTooltip(button)
+local function UpdateTooltip(button)
     local family = button.family
-    local have, bank = Inventory.StockCount(family)
+    if not family then return end
+    local grade = Inventory.StockRank(family)
     GameTooltip:SetOwner(button, UI.VerticalAnchor(button))
     GameTooltip:SetItemByID(button.rank.item)
-    GameTooltip:AddLine(" ")
-    TooltipLine(string.format(L.TIP_STOCK, have, Inventory.StockTarget(family)), have > 0 and C.muted or C.bad)
-    if bank > 0 then TooltipLine(string.format(L.TIP_IN_BANK, bank), C.muted) end
+    FloatingBar.AddTooltipHeader(family)
+    FloatingBar.AddStockLines(family, grade)
+    FloatingBar.AddBagLines(family, grade)
+    FloatingBar.AddGestureLines(L.TIP_SETTINGS)
     GameTooltip:Show()
 end
 
@@ -77,12 +73,11 @@ local function CreateButton()
     local index = #buttons + 1
     local button = floating:CreateButton("ReScrollUtility" .. index)
     button:SetAttribute("type", "item")
-    button:SetScript("PostClick", function(_, mouseButton, down)
-        if mouseButton == "RightButton" and not down then OpenSettings() end
+    button:SetScript("PostClick", function(_, mouseButton)
+        if mouseButton == "RightButton" then OpenSettings() end
     end)
-    button:HookScript("OnEnter", function(self)
-        if self.family then ShowTooltip(self) end
-    end)
+    button.UpdateTooltip = UpdateTooltip
+    button:HookScript("OnEnter", UpdateTooltip)
     buttons[index] = button
     return button
 end
@@ -104,7 +99,6 @@ local function Create()
         barName = "ReScrollUtilityBar",
         positionKey = "utilityPosition",
         anchorBar = AnchorBar,
-        hint = "UTILITY_HEADER_DESC",
         onSettings = OpenSettings,
     })
     UtilityBar.floating = floating

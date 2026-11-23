@@ -40,16 +40,6 @@ local function Record(family)
     return record
 end
 
-local function OwnedRank(family, level)
-    local lowerAllowed = ns.db.lowerRanks
-    local top = Inventory.TopUsableRank(family, level)
-    for index = top.index, 1, -1 do
-        local rank = family.ranks[index]
-        if Inventory.Count(rank.item) > 0 then return rank end
-        if not lowerAllowed then return nil end
-    end
-end
-
 local function CoverAmount(buffKey)
     local best = 0
     if not buffKey then return best end
@@ -116,7 +106,7 @@ local function Evaluate(family, level, now)
     if not Catalog.IsEnabled(family) or snoozed[family.key] then return nil end
     local top = Inventory.TopUsableRank(family, level)
     if not top then return nil end
-    local owned = OwnedRank(family, level)
+    local owned = Inventory.OwnedRank(family, level, ns.db.lowerRanks)
     local wanted = (owned or top).amount
     if CoverAmount(family.coveredBy) >= wanted or Learning.IsBlocked(family) then return nil end
     local pendingUntil = pending[family.key]

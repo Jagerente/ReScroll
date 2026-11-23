@@ -22,8 +22,11 @@ local CONTENT_INSET = 8
 local SECTION_GAP = 10
 local SLIDER_GAP = 8
 local PARAGRAPH_GAP = 4
-local FAMILY_ROW_HEIGHT = 28
-local FAMILY_ICON_SIZE = 20
+local TYPE_HEAD_HEIGHT, TYPE_ICON_SIZE, TYPE_TEXT_GAP = 36, 30, 10
+local FORM_INDENT = TYPE_ICON_SIZE + TYPE_TEXT_GAP
+local FORM_ROW_HEIGHT, FORM_TOP_GAP, FORM_LABEL_GAP = 26, 4, 8
+local FORM_SLIDER_WIDTH = 180
+local ICON_BACK = { 0, 0, 0, 0.7 }
 local ICON_CROP = 0.08
 local DRAG_ALPHA = 0.45
 local DROP_LINE_HEIGHT = 2
@@ -120,11 +123,6 @@ local function IsCurrent(page)
     return window and window:IsShown() and currentPage == page
 end
 
-local function FamilySummary(family)
-    if Inventory.TopUsableRank(family, UnitLevel("player")) then return "" end
-    return string.format(L.FROM_LEVEL, family.ranks[1].level)
-end
-
 local function AddLearnedButton(page)
     local button = W.Button(page.content, nil, function()
         ns.Learning.Forget()
@@ -155,32 +153,67 @@ local UTILITY_VISIBILITY_MODES = {
     { value = "never", key = "UTILITY_VISIBILITY_never" },
 }
 
-local ROW_GAP, ROW_SLIDER_GAP = 8, 4
+local ROW_GAP = 8
 local STOCK_STACKS = 2
 
 local function StockMax(family)
     return family.top.stack * STOCK_STACKS
 end
 
+local function RankInBags(family)
+    return Inventory.OwnedRank(family, UnitLevel("player"), family.utility or ns.db.lowerRanks)
+end
+
+local function OwnSpell(family)
+    local top = Inventory.TopUsableRank(family, UnitLevel("player"))
+    return top and Inventory.OwnSpell(family, top)
+end
+
+local function FamilyStatus(family)
+    if not Inventory.TopUsableRank(family, UnitLevel("player")) then
+        return string.format(L.FROM_LEVEL, family.ranks[1].level), C.muted
+    end
+    local own = OwnSpell(family)
+    if own then return C_Spell.GetSpellName(own.spell), C.muted end
+    if not RankInBags(family) then return L.NONE_IN_BAGS, C.bad end
+    return string.format(L.AH_HAVE, (Inventory.StockCount(family)), Inventory.StockTarget(family)), C.muted
+end
+
+local function ShowHeadTooltip(head, family)
+    local own = OwnSpell(family)
+    GameTooltip:SetOwner(head, "ANCHOR_RIGHT")
+    if own then
+        GameTooltip:SetSpellByID(own.spell)
+    else
+        GameTooltip:SetItemByID((RankInBags(family) or family.top).item)
+    end
+    GameTooltip:Show()
+end
+
 local function CreateRowHead(row, list)
     local head = CreateFrame("Button", nil, row)
-    head:SetHeight(FAMILY_ROW_HEIGHT)
+    head:SetHeight(TYPE_HEAD_HEIGHT)
     head:SetPoint("TOPLEFT")
     head:SetPoint("TOPRIGHT")
     W.RowHover(head)
-    row.icon = head:CreateTexture(nil, "ARTWORK")
-    row.icon:SetSize(FAMILY_ICON_SIZE, FAMILY_ICON_SIZE)
-    row.icon:SetPoint("LEFT")
+    local back = head:CreateTexture(nil, "ARTWORK")
+    back:SetColorTexture(unpack(ICON_BACK))
+    back:SetSize(TYPE_ICON_SIZE, TYPE_ICON_SIZE)
+    back:SetPoint("LEFT")
+    row.icon = head:CreateTexture(nil, "OVERLAY")
+    row.icon:SetPoint("TOPLEFT", back, 1, -1)
+    row.icon:SetPoint("BOTTOMRIGHT", back, -1, 1)
     row.icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
     row.switch = W.CreateSwitch(head)
     row.switch:SetPoint("RIGHT")
-    row.status = UI.Text(head, T.label, C.muted)
-    row.status:SetPoint("RIGHT", row.switch, "LEFT", -12, 0)
-    row.status:SetJustifyH("RIGHT")
-    row.name = UI.Text(head, T.body, C.text)
-    row.name:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
-    row.name:SetPoint("RIGHT", row.status, "LEFT", -8, 0)
+    row.name = UI.BoldText(head, T.body, C.text)
+    row.name:SetPoint("TOPLEFT", back, "TOPRIGHT", TYPE_TEXT_GAP, 0)
+    row.name:SetPoint("RIGHT", row.switch, "LEFT", -TYPE_TEXT_GAP, 0)
     row.name:SetJustifyH("LEFT")
+    row.status = UI.Text(head, T.label, C.muted)
+    row.status:SetPoint("BOTTOMLEFT", back, "BOTTOMRIGHT", TYPE_TEXT_GAP, 0)
+    row.status:SetPoint("RIGHT", row.switch, "LEFT", -TYPE_TEXT_GAP, 0)
+    row.status:SetJustifyH("LEFT")
     head:SetScript("OnMouseDown", function() row.dragged = false end)
     head:SetScript("OnClick", function()
         if row.dragged then return end
@@ -188,9 +221,7 @@ local function CreateRowHead(row, list)
     end)
     head:HookScript("OnEnter", function(self)
         W.SetSwitchHover(row.switch, true)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetItemByID(row.family.top.item)
-        GameTooltip:Show()
+        ShowHeadTooltip(self, row.family)
     end)
     head:HookScript("OnLeave", function(self)
         W.SetSwitchHover(row.switch, false)
@@ -204,36 +235,68 @@ local function CreateRowHead(row, list)
     row.head = head
 end
 
+local function ShowStockHint(form)
+    local family = form:GetParent().family
+    local grade = #family.ranks > 1 and Inventory.StockRank(family)
+    if not grade then return end
+    GameTooltip:SetOwner(form, "ANCHOR_RIGHT")
+    GameTooltip:SetText(string.format(L.TIP_STOCK_FROM, Catalog.RomanRank(grade)), 1, 1, 1, 1, true)
+    GameTooltip:Show()
+end
+
+local function CreateStockRow(row)
+    local form = CreateFrame("Frame", nil, row)
+    form:SetSize(PAGE_WIDTH - FORM_INDENT, FORM_ROW_HEIGHT)
+    form:SetPoint("TOPLEFT", FORM_INDENT, -(TYPE_HEAD_HEIGHT + FORM_TOP_GAP))
+    form:EnableMouse(true)
+    form:SetScript("OnEnter", ShowStockHint)
+    form:SetScript("OnLeave", W.HideHint)
+    row.stockOptions = {
+        min = 0, max = StockMax(row.family), step = 1,
+        get = function() return Inventory.StockTarget(row.family) end,
+        set = function(value) Inventory.SetStockTarget(row.family, value) end,
+    }
+    row.slider = W.Slider(form, FORM_SLIDER_WIDTH, row.stockOptions)
+    row.slider:SetPoint("RIGHT")
+    local label = UI.Text(form, T.label, C.muted)
+    label:SetPoint("LEFT")
+    label:SetPoint("RIGHT", row.slider, "LEFT", -FORM_LABEL_GAP, 0)
+    label:SetJustifyH("LEFT")
+    W.Bind(label, "STOCK_ROW")
+    row.form = form
+end
+
 local function CreateScrollRow(list, family)
     local row = CreateFrame("Frame", nil, list)
     row:SetWidth(PAGE_WIDTH)
     row.family = family
     CreateRowHead(row, list)
-    row.stockOptions = {
-        min = 0, max = StockMax(family), step = 1,
-        get = function() return Inventory.StockTarget(row.family) end,
-        set = function(value) Inventory.SetStockTarget(row.family, value) end,
-    }
-    local indent = FAMILY_ICON_SIZE + 8
-    row.slider = W.Slider(row, PAGE_WIDTH - indent, row.stockOptions)
-    row.slider:SetPoint("TOPLEFT", row, "TOPLEFT", indent, -(FAMILY_ROW_HEIGHT + ROW_SLIDER_GAP))
+    CreateStockRow(row)
     return row
 end
 
-local function PaintScrollRow(row, animate)
+local function PaintHead(row, enabled, animate)
     local family = row.family
-    local enabled = Catalog.IsEnabled(family)
-    row.icon:SetTexture(Catalog.Icon(family))
-    row.icon:SetDesaturated(not enabled)
+    local own = OwnSpell(family)
+    local rank = RankInBags(family)
+    row.icon:SetTexture(own and C_Spell.GetSpellTexture(own.spell) or Catalog.Icon(family, rank))
+    row.icon:SetDesaturated(not enabled or not (own or rank))
     row.name:SetText(Catalog.Name(family))
     row.name:SetTextColor(unpack(enabled and C.text or C.muted))
-    row.status:SetText(FamilySummary(family))
+    local status, color = FamilyStatus(family)
+    row.status:SetText(status)
+    row.status:SetTextColor(unpack(enabled and color or C.muted))
     W.SetSwitch(row.switch, enabled, animate)
-    row.stockOptions.max = StockMax(family)
-    row.slider:SetShown(enabled)
+end
+
+local function PaintScrollRow(row, animate)
+    local enabled = Catalog.IsEnabled(row.family)
+    PaintHead(row, enabled, animate)
+    row.stockOptions.max = StockMax(row.family)
+    row.form:SetShown(enabled)
     row.slider:Refresh()
-    local height = FAMILY_ROW_HEIGHT
-    if enabled then height = height + ROW_SLIDER_GAP + row.slider:GetHeight() end
+    local height = TYPE_HEAD_HEIGHT
+    if enabled then height = height + FORM_TOP_GAP + FORM_ROW_HEIGHT end
     row:SetHeight(height)
 end
 
@@ -323,7 +386,6 @@ end
 
 local function AddUtilitySection(page)
     page.sections.utility = AddHeading(page, "SECTION_UTILITY")
-    AddParagraph(page, "UTILITY_EXPLAIN", 0)
     local list = AddScrollList(page, Catalog.utilities)
     AddSegmented(page, "utilityVisibility", "UTILITY_VISIBILITY", UTILITY_VISIBILITY_MODES, SECTION_GAP)
     page.stack:Add(W.Button(page.content, "UTILITY_RECENTER", function() ns.UtilityBar.floating:ResetPosition() end), 12)

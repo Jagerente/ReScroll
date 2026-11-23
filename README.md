@@ -2,7 +2,7 @@
 
 # ReScroll: Scrolls Reminder & ReStock
 
-Shows which scroll buffs you are missing in WoW Forever, makes them easy to apply and restocks scrolls from the auction house and the bank.
+Shows which scroll buffs you are missing in WoW Forever, applies them from a button or a key and restocks scrolls from the auction house and the bank.
 
 ![The scroll panel with the Apply button and the missing scrolls](https://raw.githubusercontent.com/Jagerente/ReScroll/main/branding/screenshots/bar.png)
 
@@ -24,7 +24,7 @@ Each character gets its own set. Stamina and Protection are on for every class, 
 - Warlock: Intellect
 - Shaman and druid: all four
 
-Switch any scroll on or off on the Scrolls tab of the settings. Each scroll you switch on gets a slider for how many to keep in bags: one stack (5) by default, up to two stacks.
+Switch any scroll on or off on the Scrolls tab of the settings. Each scroll you switch on gets a **Keep in bags** slider: one stack (5) by default, up to two stacks.
 
 ## How it decides
 
@@ -42,8 +42,9 @@ Stacking rules come from the server and may differ from Classic. When a scroll b
 
 - Click an icon to apply that scroll to yourself. Scrolls always go on you, even with a friendly target.
 - **Apply** goes through the missing buffs one by one. Bind a key to it in the settings (General tab) or in the game's key bindings, then press it a few times.
+- Hover an icon for the scroll's own tooltip, with your stock and the ranks in your bags added under it.
 - Right-click an icon to hide it until you change zones.
-- Drag the title line or Alt-drag an icon to move the panel; middle-click the title line to put it back.
+- Drag the title line, or Alt-drag an icon or **Apply**, to move the panel; middle-click the title line to put it back.
 
 The panel shows up out of combat when something is missing: always (the default), in a group (and in any dungeon or raid), or only on a ready check. On a ready check it also shows up for 40 seconds and flashes.
 

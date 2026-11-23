@@ -1,9 +1,11 @@
 local _, ns = ...
 
 local UI = ns.UI
+local L = ns.L
 local C = UI.COLORS
 local T = UI.TEXT
 local W = ns.Widgets
+local Catalog = ns.Catalog
 local Inventory = ns.Inventory
 
 local FloatingBar = {}
@@ -13,6 +15,7 @@ local PAD = 6
 local HEADER_HEIGHT, HEADER_GAP = 14, 5
 local HEADER_GLYPH_HEIGHT, HEADER_GLYPH_GAP = 11, 5
 local NO_ACTION = "none"
+local ALT_CLICKS = { "alt-type1", "alt-shift-type1", "alt-ctrl-type1", "alt-ctrl-shift-type1" }
 local BORDER = 1
 local ICON_CROP = 0.08
 local PRESS_INSET = 1
@@ -23,6 +26,10 @@ local ICON_BACK = { 0, 0, 0, 0.7 }
 local BACKGROUND = { C.window[1], C.window[2], C.window[3] }
 local STRATA = "MEDIUM"
 local PERCENT = 100
+local TIP_GLYPH_HEIGHT = 14
+local TIP_GLYPH = UI.InlineGlyph(TIP_GLYPH_HEIGHT)
+local TIP_GAP = " "
+local TIP_LIST_MIN_KINDS = 2
 
 FloatingBar.PAD = PAD
 FloatingBar.LABEL_INSET = LABEL_INSET
@@ -40,10 +47,75 @@ function FloatingBar.Scrim(parent, fromTop)
     return scrim
 end
 
-function FloatingBar.CountColor(family, have)
+function FloatingBar.CountColor(family, have, fullColor)
     if have == 0 then return C.bad end
     if have < Inventory.StockTarget(family) then return C.warn end
-    return C.text
+    return fullColor or C.text
+end
+
+local function AddRow(left, right, leftColor, rightColor)
+    GameTooltip:AddDoubleLine(left, right, leftColor[1], leftColor[2], leftColor[3], rightColor[1], rightColor[2], rightColor[3])
+end
+
+local function AddGap()
+    GameTooltip:AddLine(TIP_GAP)
+end
+
+function FloatingBar.AddTooltipHeader(family)
+    AddGap()
+    AddRow(TIP_GLYPH .. " " .. ns.TITLE, Catalog.Name(family), C.accent, C.text)
+end
+
+function FloatingBar.AddStockLines(family, grade)
+    local have, bank = Inventory.StockCount(family, grade)
+    local count = UI.Colored(have, FloatingBar.CountColor(family, have, C.good))
+    AddRow(L.TIP_STOCK, string.format(L.TIP_STOCK_VALUE, count, Inventory.StockTarget(family)), C.muted, C.muted)
+    if bank > 0 then AddRow(L.TIP_IN_BANK, bank, C.muted, C.text) end
+end
+
+local owned, offered = {}, {}
+
+local function RanksInBags(family)
+    wipe(owned)
+    for _, rank in ipairs(Inventory.OfferRanks(family, UnitLevel("player"), offered)) do
+        if Inventory.Count(rank.item) > 0 then owned[#owned + 1] = rank end
+    end
+    return owned
+end
+
+local function NamesCountedRanks(family, grade, ranks)
+    if not grade or #family.ranks < 2 then return false end
+    if grade ~= Inventory.TopUsableRank(family, UnitLevel("player")) then return true end
+    local lowest = ranks[#ranks]
+    return lowest ~= nil and lowest.index < grade.index
+end
+
+local function RankLabel(family, rank)
+    local name = Catalog.RankName(family, rank)
+    if family.utility then return name end
+    return name .. " " .. UI.Colored(string.format(L.STAT_BONUS, rank.amount), C.faint)
+end
+
+function FloatingBar.AddBagLines(family, grade)
+    local ranks = RanksInBags(family)
+    local listed = #ranks >= TIP_LIST_MIN_KINDS
+    if listed then AddGap() end
+    if NamesCountedRanks(family, grade, ranks) then
+        W.TooltipLine(string.format(L.TIP_STOCK_FROM, UI.Colored(Catalog.RomanRank(grade), C.text)), C.faint)
+    end
+    if not listed then return end
+    for _, rank in ipairs(ranks) do
+        local color = grade and rank.index >= grade.index and C.text or C.faint
+        AddRow(RankLabel(family, rank), string.format(L.COUNT, Inventory.Count(rank.item)), color, color)
+    end
+end
+
+function FloatingBar.AddGestureLines(rightClick)
+    local canMove = not ns.db.locked and not InCombatLockdown()
+    if not canMove and not rightClick then return end
+    AddGap()
+    if canMove then AddRow(L.TIP_ALT_DRAG, L.TIP_MOVE, C.accent, C.text) end
+    if rightClick then AddRow(L.TIP_RIGHT_CLICK, rightClick, C.accent, C.text) end
 end
 
 function FloatingBar.SetCooldown(button, start, duration)
@@ -144,17 +216,29 @@ function BarMixin:PaintBackground()
     self.bar.background:SetAlpha(ns.db.barBackground / PERCENT)
 end
 
-function BarMixin:CreateButton(name)
-    local button = CreateFrame("Button", name, self.bar, "SecureActionButtonTemplate")
-    button:RegisterForClicks("AnyUp", "AnyDown")
+local function IgnoreDrag() end
+
+function BarMixin:BindMouse(button)
+    button:RegisterForClicks("AnyUp")
+    button:RegisterForDrag("LeftButton")
+    button:SetScript("OnDragStart", IgnoreDrag)
+    button:SetAttribute("useOnKeyDown", false)
     button:SetAttribute("*type2", NO_ACTION)
-    button:SetAttribute("alt-type1", NO_ACTION)
-    button:Hide()
-    CreateArt(button)
+    button:SetAttribute("*type3", NO_ACTION)
+    for _, attribute in ipairs(ALT_CLICKS) do
+        button:SetAttribute(attribute, NO_ACTION)
+    end
     W.DragHandle(button, function()
         if not IsAltKeyDown() then return false end
         return self:StartMoving()
     end, function() self:StopMoving() end)
+end
+
+function BarMixin:CreateButton(name)
+    local button = CreateFrame("Button", name, self.bar, "SecureActionButtonTemplate")
+    button:Hide()
+    CreateArt(button)
+    self:BindMouse(button)
     button:HookScript("OnEnter", function(b) Highlight(b, true) end)
     button:HookScript("OnLeave", function(b)
         Highlight(b, false)
@@ -166,7 +250,7 @@ function BarMixin:CreateButton(name)
     return button
 end
 
-local function CreateHeader(panel, opts)
+local function CreateHeader(panel, onSettings)
     local header = CreateFrame("Frame", nil, panel.bar)
     header:SetHeight(HEADER_HEIGHT)
     header:SetPoint("TOPLEFT", PAD, -PAD)
@@ -177,12 +261,12 @@ local function CreateHeader(panel, opts)
     panel.title = UI.BoldText(header, T.label, C.text)
     panel.title:SetPoint("LEFT", panel.glyph, "RIGHT", HEADER_GLYPH_GAP, 0)
     header:SetScript("OnEnter", function(self)
-        W.ShowHint(self, ns.db.locked and "HEADER_LOCKED_DESC" or opts.hint)
+        W.ShowHint(self, ns.db.locked and "HEADER_LOCKED_DESC" or "HEADER_DESC")
     end)
     header:SetScript("OnLeave", W.HideHint)
     header:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then
-            opts.onSettings()
+            onSettings()
         elseif button == "MiddleButton" and not ns.db.locked then
             panel:ResetPosition()
         end
@@ -205,7 +289,7 @@ function FloatingBar.Create(opts)
     bar.background = UI.Fill(bar, BACKGROUND)
     panel.bar = bar
     panel:PaintBackground()
-    CreateHeader(panel, opts)
+    CreateHeader(panel, opts.onSettings)
 
     ns.Listen("SETTING_CHANGED", function(key)
         if key == nil or key == "barBackground" then panel:PaintBackground() end

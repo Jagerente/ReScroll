@@ -16,8 +16,8 @@ ns.Bar = Bar
 Bar.APPLY_BUTTON = "ReScrollApplyButton"
 Bar.BINDING = "CLICK " .. Bar.APPLY_BUTTON .. ":LeftButton"
 
+local APPLY_PANEL_BUTTON = "ReScrollApplyPanelButton"
 local PAD = FloatingBar.PAD
-local NO_ACTION = "none"
 local APPLY_TEXT_PAD, APPLY_MIN_WIDTH = 12, 64
 local BORDER, LABEL_INSET = FloatingBar.BORDER, FloatingBar.LABEL_INSET
 local PRESS_INSET = 1
@@ -30,7 +30,7 @@ local CONTROL_DELAY = 0.5
 local PULSE_ALPHA, PULSE_TIME, PULSE_LOOPS = 0.55, 0.35, 3
 local GLOW_OUTSET = 2
 
-local floating, holder, bar, applyButton, glow, pulse
+local floating, holder, bar, applyButton, applyKeyButton, glow, pulse
 local slots = {}
 local visible = {}
 local layoutMotion = {}
@@ -83,59 +83,41 @@ end
 local function AddStatusLine(record)
     local state = record.state
     if state == Status.EXPIRING and not record.rank then
-        TooltipLine(L.TIP_NO_REFRESH, C.muted)
+        TooltipLine(L.TIP_NO_REFRESH, C.warn)
     elseif state == Status.UPGRADE then
-        TooltipLine(string.format(L.TIP_UPGRADE, RomanRank(record.activeRank), RomanRank(record.rank)), C.good)
+        local active, stronger = UI.Colored(RomanRank(record.activeRank), C.text), UI.Colored(RomanRank(record.rank), C.text)
+        TooltipLine(string.format(L.TIP_UPGRADE, active, stronger), C.muted)
     elseif state == Status.GROUP then
         local provider = record.provider
-        local r, g, b = UI.ClassColor(provider.class)
-        TooltipLine(string.format(L.TIP_GROUP, CreateColor(r, g, b):WrapTextInColorCode(provider.name or "?")), C.text)
+        local name = UI.Colored(provider.name or "?", { UI.ClassColor(provider.class) })
+        TooltipLine(string.format(L.TIP_GROUP, name), C.muted)
     end
 end
 
-local inBags, offeredRanks = {}, {}
-
-local function RanksInBags(family)
-    wipe(inBags)
-    for _, rank in ipairs(Inventory.OfferRanks(family, UnitLevel("player"), offeredRanks)) do
-        local count = Inventory.Count(rank.item)
-        if count > 0 then inBags[#inBags + 1] = string.format(L.RANK_COUNT, RomanRank(rank), count) end
-    end
-    return inBags
-end
-
-local function StockLine(family)
-    local grade = Inventory.StockRank(family)
-    local count = Inventory.StockCount(family, grade)
-    local target = Inventory.StockTarget(family)
-    if grade and grade ~= Inventory.TopUsableRank(family, UnitLevel("player")) then
-        return string.format(L.TIP_STOCK_FROM, count, target, RomanRank(grade))
-    end
-    return string.format(L.TIP_STOCK, count, target)
-end
-
-local function AddStockLines(record)
+local function AddScrollLines(record)
     local family = record.family
-    TooltipLine(StockLine(family), C.muted)
-    local ranks = RanksInBags(family)
-    if #ranks > 1 or (#ranks == 1 and record.rank ~= record.top) then
-        TooltipLine(string.format(L.TIP_BY_RANK, table.concat(ranks, ", ")), C.muted)
-    end
-    local _, bank = Inventory.StockCount(family)
-    if bank > 0 then TooltipLine(string.format(L.TIP_IN_BANK, bank), C.muted) end
+    local grade = Inventory.StockRank(family)
+    FloatingBar.AddStockLines(family, grade)
+    AddStatusLine(record)
+    FloatingBar.AddBagLines(family, grade)
 end
 
 local function ShowRecordTooltip(owner, record)
     GameTooltip:SetOwner(owner, UI.VerticalAnchor(owner))
     if record.spell then
         GameTooltip:SetSpellByID(record.spell)
+        FloatingBar.AddTooltipHeader(record.family)
     else
         GameTooltip:SetItemByID((record.rank or record.top).item)
-        GameTooltip:AddLine(" ")
-        AddStatusLine(record)
-        AddStockLines(record)
+        FloatingBar.AddTooltipHeader(record.family)
+        AddScrollLines(record)
     end
+    FloatingBar.AddGestureLines(not ns.TestMode.active and L.TIP_HIDE_ZONE or nil)
     GameTooltip:Show()
+end
+
+local function UpdateSlotTooltip(slot)
+    if slot.record then ShowRecordTooltip(slot, slot.record) end
 end
 
 local function PaintCooldown(slot)
@@ -206,8 +188,12 @@ local function PaintSlot(slot)
     PaintCooldown(slot)
 end
 
-local function OnPreClick(self, button, down)
-    if button == "LeftButton" and down and not IsAltKeyDown() then NoteUse(self.record) end
+local function OnPanelPreClick(self, mouseButton)
+    if mouseButton == "LeftButton" and not IsAltKeyDown() then NoteUse(self.record) end
+end
+
+local function OnKeyPreClick(self, _, down)
+    if down then NoteUse(self.record) end
 end
 
 local function CreateSlot(index)
@@ -228,45 +214,46 @@ local function CreateSlot(index)
     slot.dot:SetPoint("TOPRIGHT", -3, -3)
 
     slot.fade = {}
-    slot:SetScript("PreClick", OnPreClick)
-    slot:SetScript("PostClick", function(self, button, down)
-        if button == "RightButton" and not down and self.record and not ns.TestMode.active and not InCombatLockdown() then
+    slot:SetScript("PreClick", OnPanelPreClick)
+    slot:SetScript("PostClick", function(self, button)
+        if button == "RightButton" and self.record and not ns.TestMode.active and not InCombatLockdown() then
             Status.Snooze(self.record.family)
         end
     end)
-    slot:HookScript("OnEnter", function(self)
-        if self.record then ShowRecordTooltip(self, self.record) end
-    end)
+    slot.UpdateTooltip = UpdateSlotTooltip
+    slot:HookScript("OnEnter", UpdateSlotTooltip)
     slots[index] = slot
     return slot
 end
 
 local function PaintApply(chain)
     local upcoming = chain[1]
-    applyButton.record = upcoming
+    applyButton.record, applyKeyButton.record = upcoming, upcoming
     SetAction(applyButton, upcoming)
+    SetAction(applyKeyButton, upcoming)
     applyButton.label:SetText(L.APPLY)
     local width = math.ceil(applyButton.label:GetStringWidth()) + APPLY_TEXT_PAD * 2
     applyButton:SetSize(math.max(APPLY_MIN_WIDTH, width), ns.db.iconSize)
 end
 
+local function CreateApplyKeyButton()
+    applyKeyButton = CreateFrame("Button", Bar.APPLY_BUTTON, UIParent, "SecureActionButtonTemplate")
+    applyKeyButton:RegisterForClicks("AnyUp", "AnyDown")
+    applyKeyButton:SetAttribute("unit", "player")
+    applyKeyButton:SetScript("PreClick", OnKeyPreClick)
+end
+
 local function CreateApplyButton()
-    applyButton = CreateFrame("Button", Bar.APPLY_BUTTON, bar, "SecureActionButtonTemplate")
-    applyButton:RegisterForClicks("AnyUp", "AnyDown")
+    applyButton = CreateFrame("Button", APPLY_PANEL_BUTTON, bar, "SecureActionButtonTemplate")
     applyButton:SetAttribute("unit", "player")
-    applyButton:SetAttribute("*type2", NO_ACTION)
-    applyButton:SetAttribute("alt-type1", NO_ACTION)
-    W.DragHandle(applyButton, function()
-        if not IsAltKeyDown() then return false end
-        return floating:StartMoving()
-    end, function() floating:StopMoving() end)
+    floating:BindMouse(applyButton)
     local fill = applyButton:CreateTexture(nil, "BACKGROUND")
     fill:SetAllPoints()
     W.HoverFill(applyButton, fill, C.accent, C.accentHover)
     applyButton.label = UI.BoldText(applyButton, T.label, C.onAccent)
     applyButton.label:SetPoint("CENTER")
     applyButton.fade = {}
-    applyButton:SetScript("PreClick", OnPreClick)
+    applyButton:SetScript("PreClick", OnPanelPreClick)
     applyButton:HookScript("OnMouseDown", function(self) self.label:SetPoint("CENTER", 0, -PRESS_INSET) end)
     applyButton:HookScript("OnMouseUp", function(self) self.label:SetPoint("CENTER", 0, 0) end)
 end
@@ -312,7 +299,6 @@ local function Create()
         barName = "ReScrollBar",
         positionKey = "position",
         anchorBar = AnchorBar,
-        hint = "BAR_HEADER_DESC",
         onSettings = function() ns.Options.Toggle() end,
     })
     Bar.floating = floating
@@ -322,6 +308,7 @@ local function Create()
     bar:SetAlpha(0)
     CreatePulse()
     CreateApplyButton()
+    CreateApplyKeyButton()
     for index = 1, #ns.FAMILIES do
         CreateSlot(index)
     end

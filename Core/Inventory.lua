@@ -126,14 +126,24 @@ function Inventory.Stock(family, grade)
     return { have = have, bank = bank, mail = inMail, need = need }
 end
 
-local function CastsItself(family, rank)
+function Inventory.OwnedRank(family, level, lowerAllowed)
+    local top = Inventory.TopUsableRank(family, level)
+    if not top then return nil end
+    for index = top.index, 1, -1 do
+        local rank = family.ranks[index]
+        if Inventory.Count(rank.item) > 0 then return rank end
+        if not lowerAllowed then return nil end
+    end
+end
+
+function Inventory.OwnSpell(family, rank)
     local own = family.coveredBy and ns.Group.SelfSpell(family.coveredBy)
-    return own ~= nil and own.amount >= rank.amount
+    if own and own.amount >= rank.amount then return own end
 end
 
 function Inventory.Restockable(family, level)
     local top = Catalog.IsEnabled(family) and Inventory.TopUsableRank(family, level)
-    return top and not CastsItself(family, top) and top or nil
+    return top and not Inventory.OwnSpell(family, top) and top or nil
 end
 
 function Inventory.IsShort(family)
