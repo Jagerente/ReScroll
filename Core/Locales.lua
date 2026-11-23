@@ -19,6 +19,7 @@ STRINGS.enUS = {
     HEADER = "Scrolls",
     HEADER_DESC = "Drag to move the panel. Right-click opens or closes the settings, middle-click puts the panel back.",
     HEADER_LOCKED_DESC = "The panel is locked. Right-click opens or closes the settings.",
+    HEADER_COMBAT_DESC = "Right-click opens or closes the settings.",
     APPLY = "Apply",
     BINDING_APPLY = "Apply the next missing scroll",
 
@@ -34,12 +35,14 @@ STRINGS.enUS = {
     TIP_RIGHT_CLICK = "Right-click",
     TIP_SETTINGS = "Settings",
     TIP_HIDE_ZONE = "Hide until you change zones",
+    TIP_AFTER_COMBAT = "Your bags changed. The button switches after the fight.",
 
     SECTION_FAMILIES = "Scrolls for this character",
     FAMILIES_EXPLAIN = "Drag a scroll to change the order Apply goes through them.",
     COUNT = "×%d",
     FROM_LEVEL = "from level %d",
     NONE_IN_BAGS = "None in your bags",
+    STOCK_IN_BAGS = "%d in bags",
     STOCK_ROW = "Keep in bags",
 
     SECTION_RULES = "Rules",
@@ -215,6 +218,7 @@ STRINGS.ruRU = {
     HEADER = "Свитки",
     HEADER_DESC = "Перетащите, чтобы передвинуть панель. ПКМ открывает и закрывает настройки, клик колёсиком возвращает панель на место.",
     HEADER_LOCKED_DESC = "Панель закреплена. ПКМ открывает и закрывает настройки.",
+    HEADER_COMBAT_DESC = "ПКМ открывает и закрывает настройки.",
     APPLY = "Применить",
     BINDING_APPLY = "Применить следующий свиток",
 
@@ -230,12 +234,14 @@ STRINGS.ruRU = {
     TIP_RIGHT_CLICK = "ПКМ",
     TIP_SETTINGS = "Настройки",
     TIP_HIDE_ZONE = "Скрыть до смены зоны",
+    TIP_AFTER_COMBAT = "Сумки изменились. Кнопка переключится после боя.",
 
     SECTION_FAMILIES = "Свитки этого персонажа",
     FAMILIES_EXPLAIN = "Перетащите свиток, чтобы изменить порядок для кнопки «Применить».",
     COUNT = "×%d",
     FROM_LEVEL = "с %d уровня",
     NONE_IN_BAGS = "В сумках нет",
+    STOCK_IN_BAGS = "В сумках %d",
     STOCK_ROW = "Держать в сумках",
 
     SECTION_RULES = "Правила",

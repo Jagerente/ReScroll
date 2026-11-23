@@ -19,6 +19,8 @@ local ranks = {}
 local job
 local lastMove
 local lockWaits = 0
+local windowOpen = false
+local takeOnOpen = false
 
 local function Changed()
     ns.Fire("BANK_CHANGED")
@@ -88,7 +90,6 @@ local function Rebuild()
         end
     end
 end
-Bank.Rebuild = Rebuild
 
 local function NextMove()
     local level = UnitLevel("player")
@@ -159,26 +160,47 @@ function Bank.Take(entry)
     Step()
 end
 
-local function OnOpened()
-    if not ns.db.bank then return end
+local function ShowPanel(runAuto)
     Bank.open = true
     Bank.noSpace = false
+    takeOnOpen = takeOnOpen or runAuto
     ns.Schedule("bankOpen", OPEN_DELAY, function()
+        local take = takeOnOpen
+        takeOnOpen = false
         if not Bank.open then return end
         Inventory.Recount()
         Rebuild()
         if #entries == 0 then return end
         ns.Fire("BANK_SHOWN", true)
-        if ns.db.bankAuto then Bank.Take() end
+        if take and ns.db.bankAuto then Bank.Take() end
     end)
 end
 
-local function OnClosed()
+local function HidePanel()
     if not Bank.open then return end
     Bank.open = false
     job, lastMove = nil, nil
     Bank.moving = false
     ns.Fire("BANK_SHOWN", false)
+end
+
+local function OnOpened()
+    windowOpen = true
+    if ns.db.bank then ShowPanel(true) end
+end
+
+local function OnClosed()
+    windowOpen = false
+    takeOnOpen = false
+    HidePanel()
+end
+
+local function SyncPanel()
+    if not ns.db.bank then
+        HidePanel()
+    elseif windowOpen and not Bank.open then
+        ShowPanel(false)
+    end
 end
 
 local function RebuildIfIdle()
@@ -191,13 +213,8 @@ ns.Listen("INVENTORY_CHANGED", RebuildIfIdle)
 ns.Listen("FAMILIES_CHANGED", RebuildIfIdle)
 ns.Listen("STOCK_CHANGED", RebuildIfIdle)
 ns.Listen("SETTING_CHANGED", function(key)
-    if not Bank.open then return end
-    if key == "bank" and not ns.db.bank then
-        OnClosed()
-    elseif not job then
-        Rebuild()
-        Changed()
-    end
+    if key == nil or key == "bank" then SyncPanel() end
+    RebuildIfIdle()
 end)
 
 ns.Listen("LOGIN", function()

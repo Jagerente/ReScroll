@@ -29,22 +29,11 @@ local function ShownItem(entry)
     return (ShownRank(entry) or entry.family.top).item
 end
 
-local function Stock(entry)
-    local target = ns.Inventory.StockTarget(entry.family)
-    if entry.mail > 0 then
-        if entry.bank > 0 then return string.format(L.AH_HAVE_BANK_MAIL, entry.have, target, entry.bank, entry.mail) end
-        return string.format(L.AH_HAVE_MAIL, entry.have, target, entry.mail)
-    end
-    if entry.bank > 0 then return string.format(L.AH_HAVE_BANK, entry.have, target, entry.bank) end
-    return string.format(L.AH_HAVE, entry.have, target)
-end
-
 local function Detail(entry)
     local status = entry.status
     local offer = entry.offer
     if status == Market.SEARCHING then return L.AH_SEARCHING, C.muted end
-    if status == Market.IDLE then return Stock(entry), C.muted end
-    if status == Market.ENOUGH then return Stock(entry), C.muted end
+    if status == Market.IDLE or status == Market.ENOUGH then return SidePanel.Stock(entry), C.muted end
     if status == Market.NONE then return L.AH_NONE, C.bad end
     if status == Market.POOR then return L.AH_POOR, C.bad end
     if status == Market.BUYING then return L.AH_BUYING, C.accent end
@@ -56,7 +45,7 @@ local function Detail(entry)
         return string.format(L.AH_CHEAP_ONLY, offer.quantity, Money(offer.beyond)), C.warn
     end
     if offer.quantity < entry.need then return string.format(L.AH_PARTIAL, offer.quantity), C.warn end
-    return Stock(entry), C.muted
+    return SidePanel.Stock(entry), C.muted
 end
 
 local function LotSize(entry)
@@ -120,6 +109,7 @@ end
 local function CreateSegment(row, index)
     local segment = CreateFrame("Button", nil, row.strip)
     segment:SetHeight(STRIP_HEIGHT)
+    segment:SetMotionScriptsWhileDisabled(true)
     local hover = segment:CreateTexture(nil, "BACKGROUND")
     hover:SetAllPoints()
     W.HoverFill(segment, hover, CLEAR, SEGMENT_HOVER)
@@ -132,6 +122,7 @@ local function CreateSegment(row, index)
     segment.price:SetPoint("RIGHT", -SEGMENT_INSET, 0)
     segment.price:SetJustifyH("LEFT")
     segment:SetScript("OnClick", function(self) Market.Pick(row.entry, self.rank) end)
+    segment.UpdateTooltip = ShowSegmentTooltip
     segment:HookScript("OnEnter", ShowSegmentTooltip)
     segment:HookScript("OnLeave", W.HideHint)
     row.segments[index] = segment
@@ -193,7 +184,7 @@ local function PaintStrip(row, fresh)
     if count < 2 then return end
 
     local width = (SidePanel.ROW_WIDTH - SidePanel.TEXT_INDENT) / count
-    local busy = entry.status == Market.BUYING or entry.status == Market.CONFIRM
+    local busy = Market.Busy(entry)
     local selected
     for index = 1, count do
         local rank = ranks[count - index + 1]
@@ -292,7 +283,7 @@ local function Create()
         empty = "AH_EMPTY",
         refresh = Market.Refresh,
         onAction = Market.FindPrices,
-        toggle = { key = "countBank", label = "COUNT_BANK", desc = "COUNT_BANK_DESC" },
+        toggles = { { key = "countBank", label = "COUNT_BANK", desc = "COUNT_BANK_DESC" } },
         hosts = HOSTS,
         slot = "auction",
         offset = { x = "auctionX", y = "auctionY" },
@@ -310,10 +301,10 @@ ns.Listen("MARKET_SHOWN", function(open)
     panel:Open()
 end)
 
-ns.Listen("MARKET_CHANGED", function()
+local function RepaintIfShown()
     if panel and panel:IsShown() then Paint() end
-end)
+end
 
-ns.Listen("LOCALE_CHANGED", function()
-    if panel and panel:IsShown() then Paint() end
-end)
+ns.Listen("MARKET_CHANGED", RepaintIfShown)
+ns.Listen("LOCALE_CHANGED", RepaintIfShown)
+ns.Listen("NAMES_CHANGED", RepaintIfShown)

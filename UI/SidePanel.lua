@@ -148,18 +148,19 @@ local function CreateHeader(panel, opts)
     panel.subtitle:SetJustifyH("LEFT")
 end
 
-local function CreateToggle(panel, toggle)
+local function CreateToggle(panel, toggle, index)
     local key = toggle.key
-    panel.toggle = W.Toggle(panel, SidePanel.ROW_WIDTH, {
+    local row = W.Toggle(panel, SidePanel.ROW_WIDTH, {
         label = toggle.label,
         desc = toggle.desc,
         get = function() return ns.db[key] end,
         set = function(value) ns.Set(key, value) end,
     })
-    panel.toggle:SetPoint("TOPLEFT", panel.subtitle, "BOTTOMLEFT", 0, -TOGGLE_GAP)
+    row:SetPoint("TOPLEFT", panel.subtitle, "BOTTOMLEFT", 0, -TOGGLE_GAP - (index - 1) * TOGGLE_HEIGHT)
     ns.Listen("SETTING_CHANGED", function(changed)
-        if changed == nil or changed == key then panel.toggle:Refresh(panel:IsShown()) end
+        if changed == nil or changed == key then row:Refresh(panel:IsShown()) end
     end)
+    panel.toggles[index] = row
 end
 
 local function CreateFooter(panel, opts)
@@ -210,7 +211,9 @@ function PanelMixin:Layer()
 end
 
 function PanelMixin:Open()
-    if self.toggle then self.toggle:Refresh(false) end
+    for _, toggle in ipairs(self.toggles) do
+        toggle:Refresh(false)
+    end
     self:Layer()
     UI.FadeIn(self, FADE_TIME)
     ns.Dock:Layout()
@@ -218,7 +221,7 @@ end
 
 function PanelMixin:ListTop()
     local top = PAD + HEADER_HEIGHT + math.ceil(self.subtitle:GetStringHeight())
-    if self.toggle then top = top + TOGGLE_GAP + TOGGLE_HEIGHT end
+    if #self.toggles > 0 then top = top + TOGGLE_GAP + #self.toggles * TOGGLE_HEIGHT end
     return top + LIST_GAP
 end
 
@@ -307,7 +310,10 @@ function SidePanel.Create(name, opts)
     panel.rows = {}
     panel.background = SidePanel.AddBackground(panel, OPAQUE_WINDOW)
     CreateHeader(panel, opts)
-    if opts.toggle then CreateToggle(panel, opts.toggle) end
+    panel.toggles = {}
+    for index, toggle in ipairs(opts.toggles or {}) do
+        CreateToggle(panel, toggle, index)
+    end
     CreateList(panel, opts)
     CreateFooter(panel, opts)
     MakeMovable(panel, opts)
@@ -391,4 +397,14 @@ function SidePanel.NewRow(panel, onButton, tooltipItem)
     head:SetScript("OnLeave", W.HideHint)
     W.RowHover(head)
     return row
+end
+
+function SidePanel.Stock(entry)
+    local target = ns.Inventory.StockTarget(entry.family)
+    if entry.mail > 0 then
+        if entry.bank > 0 then return string.format(L.AH_HAVE_BANK_MAIL, entry.have, target, entry.bank, entry.mail) end
+        return string.format(L.AH_HAVE_MAIL, entry.have, target, entry.mail)
+    end
+    if entry.bank > 0 then return string.format(L.AH_HAVE_BANK, entry.have, target, entry.bank) end
+    return string.format(L.AH_HAVE, entry.have, target)
 end

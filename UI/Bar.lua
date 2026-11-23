@@ -147,12 +147,6 @@ local function PaintTimer(slot)
     end
 end
 
-local function SlotCount(record, rank)
-    local stock = Inventory.StockCount(record.family)
-    if stock > 0 then return stock, stock end
-    return Inventory.Count(rank.item), stock
-end
-
 local function PaintSlot(slot)
     local record = slot.record
     local state = record.state
@@ -170,12 +164,12 @@ local function PaintSlot(slot)
     slot.rankText:SetText(RomanRank(rank))
     slot.rankText:SetTextColor(unpack(state == Status.UPGRADE and C.good or C.text))
 
-    local count, stock
-    if not record.spell then count, stock = SlotCount(record, rank) end
+    local count, countColor
+    if not record.spell then count, countColor = FloatingBar.ShownCount(record.family, rank) end
     slot.count:SetShown(count ~= nil and ns.db.showCounts)
     if count then
         slot.count:SetText(count)
-        slot.count:SetTextColor(unpack(FloatingBar.CountColor(record.family, stock)))
+        slot.count:SetTextColor(unpack(countColor))
     end
 
     slot.scrim:SetShown(slot.rankText:IsShown() or slot.count:IsShown())
@@ -215,7 +209,7 @@ local function CreateSlot(index)
 
     slot.fade = {}
     slot:SetScript("PreClick", OnPanelPreClick)
-    slot:SetScript("PostClick", function(self, button)
+    slot:HookScript("PostClick", function(self, button)
         if button == "RightButton" and self.record and not ns.TestMode.active and not InCombatLockdown() then
             Status.Snooze(self.record.family)
         end

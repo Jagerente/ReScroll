@@ -29,6 +29,7 @@ local keep = {}
 local seen = {}
 local buying
 local purchaseTimer
+local windowOpen = false
 
 local function Changed()
     ns.Fire("MARKET_CHANGED")
@@ -38,8 +39,8 @@ local function CancelTimer(timer)
     if timer then timer:Cancel() end
 end
 
-local function Busy(entry)
-    return entry.status == Market.BUYING or entry.status == Market.CONFIRM
+function Market.Busy(entry)
+    return entry.cooling or entry.status == Market.BUYING or entry.status == Market.CONFIRM
 end
 
 local function Ceiling(base)
@@ -79,7 +80,7 @@ local function ShowStock(entry, offer)
 end
 
 local function Settle(entry)
-    if Busy(entry) then return end
+    if Market.Busy(entry) then return end
     local offer = ChosenOffer(entry)
     entry.offer = offer
     ShowStock(entry, offer)
@@ -110,7 +111,7 @@ end
 
 local function SearchTimedOut(item)
     local offer = byItem[item]
-    if not offer or Market.IsSettled(offer) then return end
+    if not offer or offer.status ~= Market.SEARCHING then return end
     offer.status = Market.NONE
     Settle(offer.entry)
     Changed()
@@ -212,19 +213,26 @@ end
 local function Accepts(offer)
     if not offer or offer.status == Market.QUEUED or offer.status == Market.IDLE then return false end
     local entry = offer.entry
-    return not (Busy(entry) and entry.offer == offer)
+    return not (Market.Busy(entry) and entry.offer == offer)
 end
 
 local function OnCommodityResults(itemID)
     local offer = byItem[itemID]
-    if not Accepts(offer) then return end
+    if not Accepts(offer) then
+        ns.AuctionQueue:Done(searcher, itemID)
+        return
+    end
     ReadCommodities(offer)
     FinishSearch(offer)
 end
 
 local function OnItemResults(itemKey)
-    local offer = itemKey and byItem[itemKey.itemID]
-    if not Accepts(offer) then return end
+    local item = itemKey and itemKey.itemID
+    local offer = item and byItem[item]
+    if not Accepts(offer) then
+        ns.AuctionQueue:Done(searcher, item)
+        return
+    end
     ReadItems(offer, itemKey)
     FinishSearch(offer)
 end
@@ -272,12 +280,12 @@ local function Sync(entry, wanted)
     local sameRanks = SameRanks(entry, wanted.ranks)
     local stale = not sameRanks or Restock(entry, wanted)
     if sameRanks then ShowStock(entry, entry.offer) end
-    if not stale or Busy(entry) then return end
+    if not stale or Market.Busy(entry) then return end
     if not sameRanks then SetRanks(entry, wanted) end
     Research(entry)
 end
 
-function Market.Rebuild()
+local function Rebuild()
     Inventory.GetShoppingList(shopping)
     wipe(entries)
     wipe(keep)
@@ -304,7 +312,7 @@ end
 
 function Market.Refresh()
     for _, entry in ipairs(entries) do
-        if not Busy(entry) then Research(entry) end
+        if not Market.Busy(entry) then Research(entry) end
     end
     Changed()
     ns.AuctionQueue:Pump()
@@ -316,7 +324,7 @@ function Market.FindPrices()
 end
 
 function Market.Pick(entry, rank)
-    if Busy(entry) or not byItem[rank.item] or byItem[rank.item].status ~= Market.READY then return end
+    if Market.Busy(entry) or not byItem[rank.item] or byItem[rank.item].status ~= Market.READY then return end
     local default = entry.offers[1].rank == rank
     ns.charDB.buyRanks[entry.family.key] = not default and rank.index or nil
     Settle(entry)
@@ -324,25 +332,28 @@ function Market.Pick(entry, rank)
     ns.Fire("STOCK_CHANGED")
 end
 
-local function EndPurchase(entry, research)
+local function FinishCooling(entry)
+    if byFamily[entry.family.key] ~= entry then return end
+    entry.cooling = nil
+    Rebuild()
+    if byFamily[entry.family.key] == entry then Research(entry) end
+    Changed()
+    ns.AuctionQueue:Pump()
+end
+
+local function EndPurchase(entry)
     CancelTimer(purchaseTimer)
     if buying == entry then buying = nil end
     entry.status = Market.SEARCHING
-    if research then
-        C_Timer.After(RESEARCH_DELAY, function()
-            if byFamily[entry.family.key] ~= entry then return end
-            Research(entry)
-            Changed()
-            ns.AuctionQueue:Pump()
-        end)
-    end
+    entry.cooling = true
+    C_Timer.After(RESEARCH_DELAY, function() FinishCooling(entry) end)
     Changed()
 end
 
 local function StartPurchaseTimer(entry)
     CancelTimer(purchaseTimer)
     purchaseTimer = C_Timer.NewTimer(PURCHASE_TIMEOUT, function()
-        if buying == entry then EndPurchase(entry, true) end
+        if buying == entry then EndPurchase(entry) end
     end)
 end
 
@@ -413,12 +424,12 @@ end
 
 local function OnPurchaseDone()
     local entry = PurchasingEntry()
-    if entry then EndPurchase(entry, true) end
+    if entry then EndPurchase(entry) end
 end
 
 local function Bought(entry, quantity)
     Inventory.AddBought(entry.offer.item, quantity, entry.countBefore)
-    EndPurchase(entry, true)
+    EndPurchase(entry)
 end
 
 local function OnCommodityBought()
@@ -446,19 +457,37 @@ local function Reset()
     wipe(seen)
 end
 
-local function OnShow()
-    if not ns.db.auction then return end
+local function ShowPanel()
     Market.open = true
     Reset()
-    Market.Rebuild()
+    Rebuild()
     ns.Fire("MARKET_SHOWN", true)
 end
 
-local function OnClosed()
+local function HidePanel()
     if not Market.open then return end
     Market.open = false
     Reset()
     ns.Fire("MARKET_SHOWN", false)
+end
+
+local function OnShow()
+    windowOpen = true
+    if ns.db.auction then ShowPanel() end
+end
+
+local function OnClosed()
+    windowOpen = false
+    HidePanel()
+end
+
+local function SyncPanel()
+    if not ns.db.auction then
+        HidePanel()
+        ns.AuctionQueue:Pump()
+    elseif windowOpen and not Market.open then
+        ShowPanel()
+    end
 end
 
 local function Resettle()
@@ -470,21 +499,22 @@ end
 
 local REBUILD_SETTINGS = { lowerRanks = true, countBank = true }
 
-ns.Listen("INVENTORY_CHANGED", function()
-    if Market.open then Market.Rebuild() end
-end)
-for _, message in ipairs({ "FAMILIES_CHANGED", "STOCK_CHANGED" }) do
-    ns.Listen(message, function()
-        if Market.open then Market.Rebuild() end
-    end)
+local function RebuildIfOpen()
+    if Market.open then Rebuild() end
 end
+
+local function OnLevelUp()
+    ns.Schedule("marketLevel", 0, RebuildIfOpen)
+end
+
+ns.Listen("INVENTORY_CHANGED", RebuildIfOpen)
+ns.Listen("FAMILIES_CHANGED", RebuildIfOpen)
+ns.Listen("STOCK_CHANGED", RebuildIfOpen)
 ns.Listen("SETTING_CHANGED", function(key)
+    if key == nil or key == "auction" then SyncPanel() end
     if not Market.open then return end
-    if key == "auction" and not ns.db.auction then
-        OnClosed()
-        ns.AuctionQueue:Pump()
-    elseif key == nil or REBUILD_SETTINGS[key] then
-        Market.Rebuild()
+    if key == nil or REBUILD_SETTINGS[key] then
+        Rebuild()
     elseif key == "priceStep" then
         Market.Refresh()
     end
@@ -501,4 +531,5 @@ ns.Listen("LOGIN", function()
     ns.RegisterEvent("COMMODITY_PURCHASE_FAILED", OnPurchaseDone)
     ns.RegisterEvent("ITEM_PURCHASED", OnItemPurchased)
     ns.RegisterEvent("PLAYER_MONEY", Resettle)
+    ns.RegisterEvent("PLAYER_LEVEL_UP", OnLevelUp)
 end)

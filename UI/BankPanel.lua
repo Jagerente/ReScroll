@@ -57,7 +57,7 @@ local function Create()
         title = "BANK_TITLE",
         empty = "BANK_DONE",
         onAction = function() Bank.Take() end,
-        toggle = { key = "bankAuto", label = "BANK_AUTO" },
+        toggles = { { key = "bankAuto", label = "BANK_AUTO" } },
         hosts = HOSTS,
         slot = "bank",
         offset = { x = "bankX", y = "bankY" },
@@ -75,10 +75,10 @@ ns.Listen("BANK_SHOWN", function(open)
     panel:Open()
 end)
 
-ns.Listen("BANK_CHANGED", function()
+local function RepaintIfShown()
     if panel and panel:IsShown() then Paint() end
-end)
+end
 
-ns.Listen("LOCALE_CHANGED", function()
-    if panel and panel:IsShown() then Paint() end
-end)
+ns.Listen("BANK_CHANGED", RepaintIfShown)
+ns.Listen("LOCALE_CHANGED", RepaintIfShown)
+ns.Listen("NAMES_CHANGED", RepaintIfShown)

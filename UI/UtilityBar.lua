@@ -2,6 +2,8 @@ local _, ns = ...
 
 local UI = ns.UI
 local L = ns.L
+local C = UI.COLORS
+local W = ns.Widgets
 local Catalog = ns.Catalog
 local Inventory = ns.Inventory
 local FloatingBar = ns.FloatingBar
@@ -33,6 +35,7 @@ local function UpdateTooltip(button)
     GameTooltip:SetItemByID(button.rank.item)
     FloatingBar.AddTooltipHeader(family)
     FloatingBar.AddStockLines(family, grade)
+    if InCombatLockdown() and UsedRank(family) ~= button.rank then W.TooltipLine(L.TIP_AFTER_COMBAT, C.warn) end
     FloatingBar.AddBagLines(family, grade)
     FloatingBar.AddGestureLines(L.TIP_SETTINGS)
     GameTooltip:Show()
@@ -44,8 +47,7 @@ end
 
 local function PaintButton(button)
     local family = button.family
-    local have = Inventory.StockCount(family)
-    local count = have > 0 and have or Inventory.Count(button.rank.item)
+    local count, countColor = FloatingBar.ShownCount(family, button.rank)
     button.icon:SetTexture(Catalog.Icon(family, button.rank))
     button.icon:SetDesaturated(count == 0)
     button.art:SetAlpha(count == 0 and EMPTY_ALPHA or 1)
@@ -54,7 +56,7 @@ local function PaintButton(button)
     button.scrim:SetShown(shown)
     if shown then
         button.count:SetText(count)
-        button.count:SetTextColor(unpack(FloatingBar.CountColor(family, have)))
+        button.count:SetTextColor(unpack(countColor))
     end
     PaintCooldown(button)
 end
@@ -73,7 +75,7 @@ local function CreateButton()
     local index = #buttons + 1
     local button = floating:CreateButton("ReScrollUtility" .. index)
     button:SetAttribute("type", "item")
-    button:SetScript("PostClick", function(_, mouseButton)
+    button:HookScript("PostClick", function(_, mouseButton)
         if mouseButton == "RightButton" then OpenSettings() end
     end)
     button.UpdateTooltip = UpdateTooltip

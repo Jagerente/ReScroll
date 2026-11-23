@@ -11,7 +11,7 @@ local Inventory = ns.Inventory
 local FloatingBar = {}
 ns.FloatingBar = FloatingBar
 
-local PAD = 6
+local PAD = 4
 local HEADER_HEIGHT, HEADER_GAP = 14, 5
 local HEADER_GLYPH_HEIGHT, HEADER_GLYPH_GAP = 11, 5
 local NO_ACTION = "none"
@@ -47,10 +47,17 @@ function FloatingBar.Scrim(parent, fromTop)
     return scrim
 end
 
-function FloatingBar.CountColor(family, have, fullColor)
+local function CountColor(family, have, fullColor)
     if have == 0 then return C.bad end
     if have < Inventory.StockTarget(family) then return C.warn end
     return fullColor or C.text
+end
+
+function FloatingBar.ShownCount(family, rank)
+    local inBags = Inventory.Count(rank.item)
+    if Inventory.StockTarget(family) == 0 then return inBags, inBags > 0 and C.text or C.bad end
+    local kept = Inventory.StockCount(family)
+    return kept > 0 and kept or inBags, CountColor(family, kept)
 end
 
 local function AddRow(left, right, leftColor, rightColor)
@@ -67,8 +74,9 @@ function FloatingBar.AddTooltipHeader(family)
 end
 
 function FloatingBar.AddStockLines(family, grade)
+    if Inventory.StockTarget(family) == 0 then return end
     local have, bank = Inventory.StockCount(family, grade)
-    local count = UI.Colored(have, FloatingBar.CountColor(family, have, C.good))
+    local count = UI.Colored(have, CountColor(family, have, C.good))
     AddRow(L.TIP_STOCK, string.format(L.TIP_STOCK_VALUE, count, Inventory.StockTarget(family)), C.muted, C.muted)
     if bank > 0 then AddRow(L.TIP_IN_BANK, bank, C.muted, C.text) end
 end
@@ -97,15 +105,17 @@ local function RankLabel(family, rank)
 end
 
 function FloatingBar.AddBagLines(family, grade)
+    local stocked = Inventory.StockTarget(family) > 0
     local ranks = RanksInBags(family)
     local listed = #ranks >= TIP_LIST_MIN_KINDS
     if listed then AddGap() end
-    if NamesCountedRanks(family, grade, ranks) then
+    if stocked and NamesCountedRanks(family, grade, ranks) then
         W.TooltipLine(string.format(L.TIP_STOCK_FROM, UI.Colored(Catalog.RomanRank(grade), C.text)), C.faint)
     end
     if not listed then return end
     for _, rank in ipairs(ranks) do
-        local color = grade and rank.index >= grade.index and C.text or C.faint
+        local counted = not stocked or (grade and rank.index >= grade.index)
+        local color = counted and C.text or C.faint
         AddRow(RankLabel(family, rank), string.format(L.COUNT, Inventory.Count(rank.item)), color, color)
     end
 end
@@ -127,9 +137,9 @@ function FloatingBar.SetCooldown(button, start, duration)
 end
 
 local function SetPressed(button, pressed)
-    local inset = BORDER + (pressed and PRESS_INSET or 0)
-    button.icon:SetPoint("TOPLEFT", inset, -inset)
-    button.icon:SetPoint("BOTTOMRIGHT", -inset, inset)
+    local inset = pressed and PRESS_INSET or 0
+    button.art:SetPoint("TOPLEFT", inset, -inset)
+    button.art:SetPoint("BOTTOMRIGHT", -inset, inset)
 end
 
 local function Highlight(button, on)
@@ -141,11 +151,12 @@ local function CreateArt(button)
     button.art:SetAllPoints()
     UI.Fill(button.art, ICON_BACK)
     button.icon = button.art:CreateTexture(nil, "ARTWORK")
+    button.icon:SetPoint("TOPLEFT", BORDER, -BORDER)
+    button.icon:SetPoint("BOTTOMRIGHT", -BORDER, BORDER)
     button.icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
-    SetPressed(button, false)
 
     button.cooldown = CreateFrame("Cooldown", nil, button, "CooldownFrameTemplate")
-    button.cooldown:SetAllPoints(button.icon)
+    button.cooldown:SetAllPoints(button.art)
     button.cooldown:SetDrawEdge(false)
     button.cooldown:SetHideCountdownNumbers(true)
 
@@ -232,6 +243,9 @@ function BarMixin:BindMouse(button)
         if not IsAltKeyDown() then return false end
         return self:StartMoving()
     end, function() self:StopMoving() end)
+    button:HookScript("PostClick", function(_, mouseButton)
+        if mouseButton == "MiddleButton" and not ns.db.locked and not InCombatLockdown() then self:ResetPosition() end
+    end)
 end
 
 function BarMixin:CreateButton(name)
@@ -250,6 +264,11 @@ function BarMixin:CreateButton(name)
     return button
 end
 
+local function HeaderHint()
+    if ns.db.locked then return "HEADER_LOCKED_DESC" end
+    return InCombatLockdown() and "HEADER_COMBAT_DESC" or "HEADER_DESC"
+end
+
 local function CreateHeader(panel, onSettings)
     local header = CreateFrame("Frame", nil, panel.bar)
     header:SetHeight(HEADER_HEIGHT)
@@ -260,14 +279,12 @@ local function CreateHeader(panel, onSettings)
     panel.glyph:SetPoint("LEFT")
     panel.title = UI.BoldText(header, T.label, C.text)
     panel.title:SetPoint("LEFT", panel.glyph, "RIGHT", HEADER_GLYPH_GAP, 0)
-    header:SetScript("OnEnter", function(self)
-        W.ShowHint(self, ns.db.locked and "HEADER_LOCKED_DESC" or "HEADER_DESC")
-    end)
+    header:SetScript("OnEnter", function(self) W.ShowHint(self, HeaderHint()) end)
     header:SetScript("OnLeave", W.HideHint)
     header:SetScript("OnMouseUp", function(_, button)
         if button == "RightButton" then
             onSettings()
-        elseif button == "MiddleButton" and not ns.db.locked then
+        elseif button == "MiddleButton" and not ns.db.locked and not InCombatLockdown() then
             panel:ResetPosition()
         end
     end)

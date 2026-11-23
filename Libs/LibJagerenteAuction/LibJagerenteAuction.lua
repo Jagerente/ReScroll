@@ -1,6 +1,6 @@
 local _, ns = ...
 
-local NAME, MINOR = "LibJagerenteAuction", 1
+local NAME, MINOR = "LibJagerenteAuction", 2
 
 local lib = _G[NAME]
 if lib and lib.minor >= MINOR then
@@ -16,6 +16,7 @@ _G[NAME] = lib
 ns.AuctionQueue = lib
 
 local SEARCH_TIMEOUT = 6
+local DROP_RETRY = 1
 local SORTS = { { sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false } }
 
 local function StopActive()
@@ -71,6 +72,7 @@ local function RequeueActive()
     if not active then return end
     StopActive()
     table.insert(lib.queue, 1, active)
+    C_Timer.After(DROP_RETRY, function() lib:Pump() end)
 end
 
 local function OnEvent(_, event)

@@ -33,6 +33,8 @@ local DROP_LINE_HEIGHT = 2
 local RESET_CONFIRM_SECONDS = 3
 local PANEL_OFFSET = 500
 local PERCENT_MAX = 100
+local ICON_SIZE_MIN, ICON_SIZE_MAX = 24, 64
+local SPACING_MAX = 16
 
 local window
 local pages = {}
@@ -175,7 +177,11 @@ local function FamilyStatus(family)
     end
     local own = OwnSpell(family)
     if own then return C_Spell.GetSpellName(own.spell), C.muted end
-    if not RankInBags(family) then return L.NONE_IN_BAGS, C.bad end
+    local rank = RankInBags(family)
+    if Inventory.StockTarget(family) == 0 then
+        return string.format(L.STOCK_IN_BAGS, rank and Inventory.Count(rank.item) or 0), C.muted
+    end
+    if not rank then return L.NONE_IN_BAGS, C.bad end
     return string.format(L.AH_HAVE, (Inventory.StockCount(family)), Inventory.StockTarget(family)), C.muted
 end
 
@@ -237,7 +243,7 @@ end
 
 local function ShowStockHint(form)
     local family = form:GetParent().family
-    local grade = #family.ranks > 1 and Inventory.StockRank(family)
+    local grade = #family.ranks > 1 and Inventory.StockTarget(family) > 0 and Inventory.StockRank(family)
     if not grade then return end
     GameTooltip:SetOwner(form, "ANCHOR_RIGHT")
     GameTooltip:SetText(string.format(L.TIP_STOCK_FROM, Catalog.RomanRank(grade)), 1, 1, 1, 1, true)
@@ -402,7 +408,6 @@ local function BuildScrolls()
     AddToggle(page, "groupBuffs", "GROUP_BUFFS", "GROUP_BUFFS_DESC")
     AddToggle(page, "lowerRanks", "LOWER_RANKS", "LOWER_RANKS_DESC")
     AddToggle(page, "upgrades", "UPGRADES", "UPGRADES_DESC")
-    AddToggle(page, "showEmpty", "SHOW_EMPTY", "SHOW_EMPTY_DESC")
     AddSlider(page, "expireMinutes", "EXPIRE_MINUTES", 0, 15, nil, 10)
     AddLearnedButton(page)
     local utilities = #Catalog.utilities > 0 and AddUtilitySection(page)
@@ -565,13 +570,14 @@ local function BuildPanel()
     AddHeading(page, "SECTION_WHEN")
     AddSegmented(page, "visibility", "VISIBILITY", VISIBILITY_MODES)
     AddParagraph(page, "VISIBILITY_EXPLAIN", 6)
+    AddToggle(page, "showEmpty", "SHOW_EMPTY", "SHOW_EMPTY_DESC")
     AddReadyCheckToggle(page)
     AddToggle(page, "hideResting", "HIDE_RESTING")
 
     AddHeading(page, "SECTION_LOOK")
-    AddSlider(page, "iconSize", "ICON_SIZE", 24, 56, nil, 4)
+    AddSlider(page, "iconSize", "ICON_SIZE", ICON_SIZE_MIN, ICON_SIZE_MAX, nil, 4)
     AddSlider(page, "perRow", "PER_ROW", 1, #ns.FAMILIES)
-    AddSlider(page, "spacing", "SPACING", 0, 12)
+    AddSlider(page, "spacing", "SPACING", 0, SPACING_MAX)
     AddSegmented(page, "grow", "GROW", GROW_MODES, SLIDER_GAP)
     AddToggle(page, "showHeader", "SHOW_HEADER", "SHOW_HEADER_DESC")
     AddToggle(page, "showCounts", "SHOW_COUNTS", "SHOW_COUNTS_DESC")

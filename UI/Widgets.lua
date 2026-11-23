@@ -69,7 +69,10 @@ function Widgets.HoverFill(frame, texture, base, hover)
         Apply(state, state.tweenValue or 0)
     end
     UI.SnapTween(state, 0, Apply)
-    frame:HookScript("OnEnter", function() UI.Tween(state, 1, HOVER_TIME, Apply) end)
+    frame:HookScript("OnEnter", function(self)
+        if self.IsEnabled and not self:IsEnabled() then return end
+        UI.Tween(state, 1, HOVER_TIME, Apply)
+    end)
     frame:HookScript("OnLeave", function() UI.Tween(state, 0, HOVER_TIME, Apply) end)
     return state
 end
@@ -156,6 +159,7 @@ function Widgets.Button(parent, key, onClick, style, width)
     local look = BUTTON_STYLES[style or "default"]
     local button = CreateFrame("Button", nil, parent)
     button:SetHeight(BUTTON_HEIGHT)
+    button:SetMotionScriptsWhileDisabled(true)
     local fill = button:CreateTexture(nil, "BACKGROUND")
     fill:SetAllPoints()
     local hover = Widgets.HoverFill(button, fill, look.fill, look.hover)
