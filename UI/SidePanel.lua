@@ -167,6 +167,7 @@ local function CreateFooter(panel, opts)
     local line = Hairline(panel)
     line:SetPoint("BOTTOMLEFT", PAD, PAD + FOOTER_HEIGHT)
     line:SetPoint("BOTTOMRIGHT", -PAD, PAD + FOOTER_HEIGHT)
+    panel.footerLine = line
     if opts.onAction then
         panel.action = W.Button(panel, nil, opts.onAction, "primary")
         panel.action:SetPoint("BOTTOMRIGHT", -PAD, PAD)
@@ -255,7 +256,12 @@ function PanelMixin:PaintRows(entries, create, paint)
     self.list:SetPoint("TOPLEFT", PAD, -top)
     self.list:SetHeight(listHeight)
     if self.action then self.action:SetShown(count > 0) end
-    self:SetHeight(top + listHeight + LIST_GAP + FOOTER_HEIGHT + PAD)
+    self:SetHeight(top + listHeight + LIST_GAP + (self.footerHidden and 0 or FOOTER_HEIGHT) + PAD)
+end
+
+function PanelMixin:SetFooterShown(shown)
+    self.footerHidden = not shown
+    self.footerLine:SetShown(shown)
 end
 
 function PanelMixin:SetAction(text, enabled)

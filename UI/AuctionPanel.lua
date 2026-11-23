@@ -18,6 +18,8 @@ local CLEAR = { 1, 1, 1, 0 }
 
 local Money, ShortMoney = SidePanel.Money, SidePanel.ShortMoney
 local HOSTS = { "AuctionHouseFrame" }
+local PRICE_UNKNOWN = "—"
+local FIND_ALL_MIN_ROWS = 2
 
 local panel
 
@@ -62,6 +64,7 @@ local function OfferFor(entry, rank)
 end
 
 local function ButtonText(entry, confirm)
+    if entry.status == Market.IDLE then return L.AH_FIND_PRICE end
     if confirm then return L.AH_CONFIRM end
     if entry.status == Market.ENOUGH then return L.AH_ENOUGH end
     return string.format(L.AH_BUY, LotSize(entry))
@@ -144,7 +147,7 @@ local function SegmentPrice(rank, offer)
         if rank.level > UnitLevel("player") then return string.format(L.AH_LOCK_LEVEL_SHORT, rank.level), C.muted end
         return L.AH_LOCK_LOWER_SHORT, C.muted
     end
-    if offer.status == Market.IDLE then return "", C.muted end
+    if offer.status == Market.IDLE then return PRICE_UNKNOWN, C.muted end
     if not Market.IsSettled(offer) then return "…", C.muted end
     if offer.status ~= Market.READY then return L.AH_NONE_SHORT, C.muted end
     return ShortMoney(offer.unitCost), Market.IsRaised(offer) and C.warn or C.text
@@ -158,9 +161,9 @@ local function PaintSegment(segment, rank, offer, chosen, busy)
     local text, color = SegmentPrice(rank, offer)
     segment.price:SetText(text)
     segment.price:SetTextColor(unpack(color))
-    local pending = offer ~= nil and (offer.status == Market.IDLE or not Market.IsSettled(offer))
-    segment:SetEnabled(OnSale(offer) and not busy)
-    segment:SetAlpha((OnSale(offer) or pending or chosen) and 1 or SidePanel.DISABLED_ALPHA)
+    local available = offer ~= nil and Market.IsAvailable(offer)
+    segment:SetEnabled(available and not busy)
+    segment:SetAlpha((available or chosen) and 1 or SidePanel.DISABLED_ALPHA)
     segment:Show()
 end
 
@@ -235,8 +238,16 @@ local function CreateStrip(row)
     row.slide = {}
 end
 
+local function OnRowButton(entry)
+    if entry.status == Market.IDLE then
+        Market.FindPrices(entry)
+    else
+        Market.Buy(entry)
+    end
+end
+
 local function CreateRow(owner)
-    local row = SidePanel.NewRow(owner, Market.Buy, ShownItem)
+    local row = SidePanel.NewRow(owner, OnRowButton, ShownItem)
     CreateStrip(row)
     return row
 end
@@ -260,7 +271,7 @@ local function PaintRow(row, fresh)
 
     row.button.text:SetText(ButtonText(entry, confirm))
     row.button:SetStyle(confirm and "primary" or "default")
-    SidePanel.SetEnabled(row.button, status == Market.READY or confirm)
+    SidePanel.SetEnabled(row.button, status == Market.IDLE or status == Market.READY or confirm)
     PaintStrip(row, fresh)
     local strip = #entry.family.ranks > 1 and STRIP_TOP + STRIP_HEIGHT or 0
     row:SetHeight(SidePanel.HEAD_HEIGHT + strip)
@@ -268,13 +279,15 @@ end
 
 local function Paint()
     panel.subtitle:SetText(ns.db.lowerRanks and L.AH_SUBTITLE_LOWER or L.AH_SUBTITLE)
+    local waiting, known = Market.PriceCounts()
+    local offerAll = waiting >= FIND_ALL_MIN_ROWS
+    panel:SetFooterShown(offerAll or known > 0)
     panel:PaintRows(Market.entries, CreateRow, PaintRow)
-    local hasRows = #Market.entries > 0
     panel.footerText:SetText(string.format(L.AH_TOTAL, Money(Market.Total())))
-    panel.footerText:SetShown(hasRows and Market.priced)
+    panel.footerText:SetShown(known > 0)
     panel:SetAction(L.AH_FIND_PRICES, true)
-    panel.action:SetShown(hasRows and not Market.priced)
-    panel.refresh:SetShown(hasRows and Market.priced)
+    panel.action:SetShown(offerAll)
+    panel.refresh:SetShown(known > 0)
 end
 
 local function Create()
@@ -282,7 +295,7 @@ local function Create()
         title = "AH_TITLE",
         empty = "AH_EMPTY",
         refresh = Market.Refresh,
-        onAction = Market.FindPrices,
+        onAction = function() Market.FindPrices() end,
         toggles = { { key = "countBank", label = "COUNT_BANK", desc = "COUNT_BANK_DESC" } },
         hosts = HOSTS,
         slot = "auction",

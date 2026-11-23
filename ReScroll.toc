@@ -2,7 +2,7 @@
 ## Title: ReScroll
 ## Notes: Shows which scroll buffs you are missing, applies them from a button or a key and restocks scrolls at the auction house and the bank.
 ## Notes-ruRU: Показывает, каких баффов от свитков не хватает, применяет их с кнопки или клавиши и пополняет запас свитков на аукционе и из банка.
-## Version: 1.3.0
+## Version: 1.4.0
 ## IconTexture: Interface\AddOns\ReScroll\Media\Icon
 ## SavedVariables: ReScrollDB
 ## SavedVariablesPerCharacter: ReScrollCharDB
