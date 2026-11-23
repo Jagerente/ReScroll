@@ -95,7 +95,7 @@ local function ShowSegmentTooltip(segment)
     if not OnSale(offer) then
         LockLines(segment)
     else
-        AddLine(string.format(L.AH_PER_SCROLL, Money(offer.unitCost)), C.text)
+        AddLine(string.format(L.AH_PER_ITEM, Money(offer.unitCost)), C.text)
         if offer.quantity > 0 then
             AddLine(string.format(L.AH_TIP_TOTAL, offer.quantity, Money(offer.cost)), C.muted)
         else

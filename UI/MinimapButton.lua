@@ -5,7 +5,7 @@ local L = ns.L
 local MinimapButton = {}
 ns.MinimapButton = MinimapButton
 
-local BUTTON_NAME = "ReScrollMinimapButton"
+local BUTTON_NAME = ns.ADDON .. "MinimapButton"
 local BUTTON_SIZE = 31
 local EDGE_PADDING = 5
 local DIAGONAL_INSET = 10
@@ -66,6 +66,7 @@ local function ShowTooltip(self)
     GameTooltip:SetText(ns.TITLE, 1, 1, 1)
     GameTooltip:AddLine(L.MINIMAP_LEFT_CLICK, unpack(ns.UI.COLORS.muted))
     GameTooltip:AddLine(L.MINIMAP_RIGHT_CLICK, unpack(ns.UI.COLORS.muted))
+    GameTooltip:AddLine(L.MINIMAP_DRAG, unpack(ns.UI.COLORS.muted))
     GameTooltip:Show()
 end
 
