@@ -137,8 +137,8 @@ local function CreateHeader(panel, opts)
     close:SetScript("OnLeave", function() cross:SetTextColor(unpack(C.muted)) end)
 
     if opts.refresh then
-        local refresh = W.Button(panel, "AH_REFRESH", opts.refresh)
-        refresh:SetPoint("RIGHT", close, "LEFT", -6, 0)
+        panel.refresh = W.Button(panel, "AH_REFRESH", opts.refresh)
+        panel.refresh:SetPoint("RIGHT", close, "LEFT", -6, 0)
     end
 
     panel.subtitle = UI.Text(panel, T.label, C.muted)

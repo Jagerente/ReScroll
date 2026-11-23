@@ -10,6 +10,7 @@
 ## X-Curse-Project-ID: 1812247
 
 Libs\LibJagerenteDock\LibJagerenteDock.lua
+Libs\LibJagerenteAuction\LibJagerenteAuction.lua
 Core\Init.lua
 Core\Locales.lua
 Data\Scrolls.lua

@@ -2,9 +2,10 @@ local _, ns = ...
 
 local Inventory = ns.Inventory
 
-local Market = { open = false, entries = {} }
+local Market = { open = false, priced = false, entries = {} }
 ns.Market = Market
 
+Market.IDLE = "idle"
 Market.QUEUED = "queued"
 Market.SEARCHING = "searching"
 Market.READY = "ready"
@@ -16,7 +17,6 @@ Market.RAISED = "raised"
 Market.ENOUGH = "enough"
 
 local COMMODITY, ITEM = "commodity", "item"
-local SEARCH_TIMEOUT = 6
 local PURCHASE_TIMEOUT = 10
 local RESEARCH_DELAY = 0.5
 local PERCENT = 100
@@ -24,15 +24,11 @@ local PERCENT = 100
 local entries = Market.entries
 local byFamily = {}
 local byItem = {}
-local queue = {}
 local shopping = {}
 local keep = {}
 local seen = {}
-local searching
 local buying
-local searchTimer, purchaseTimer
-
-local SORTS = { { sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false } }
+local purchaseTimer
 
 local function Changed()
     ns.Fire("MARKET_CHANGED")
@@ -55,7 +51,7 @@ function Market.IsSettled(offer)
 end
 
 local function Available(offer)
-    return offer.status == Market.READY or not Market.IsSettled(offer)
+    return offer.status == Market.READY or offer.status == Market.IDLE or not Market.IsSettled(offer)
 end
 
 local function ChosenOffer(entry)
@@ -93,6 +89,8 @@ local function Settle(entry)
         entry.status = Market.SEARCHING
     elseif offer.need <= 0 then
         entry.status = Market.ENOUGH
+    elseif offer.status == Market.IDLE then
+        entry.status = Market.IDLE
     elseif offer.nextCost > GetMoney() then
         entry.status = Market.POOR
     elseif Market.IsRaised(offer) then
@@ -102,47 +100,45 @@ local function Settle(entry)
     end
 end
 
-local function Pump()
-    if searching or not Market.open or #queue == 0 then return end
-    if not C_AuctionHouse.IsThrottledMessageSystemReady() then return end
-    local offer = table.remove(queue, 1)
-    if byItem[offer.item] ~= offer then return Pump() end
-    searching = offer
+local function BeginSearch(item)
+    local offer = byItem[item]
+    if not offer or Market.IsSettled(offer) then return false end
     offer.status = Market.SEARCHING
-    C_AuctionHouse.SendSearchQuery(C_AuctionHouse.MakeItemKey(offer.item), SORTS, false)
-    CancelTimer(searchTimer)
-    searchTimer = C_Timer.NewTimer(SEARCH_TIMEOUT, function()
-        if searching ~= offer then return end
-        searching = nil
-        offer.status = Market.NONE
-        Settle(offer.entry)
-        Changed()
-        Pump()
-    end)
+    Changed()
+    return true
+end
+
+local function SearchTimedOut(item)
+    local offer = byItem[item]
+    if not offer or Market.IsSettled(offer) then return end
+    offer.status = Market.NONE
+    Settle(offer.entry)
     Changed()
 end
+
+local searcher = { Begin = BeginSearch, TimedOut = SearchTimedOut }
 
 local function Enqueue(offer)
     if not Market.IsSettled(offer) then return end
     offer.status = Market.QUEUED
-    queue[#queue + 1] = offer
+    ns.AuctionQueue:Add(searcher, offer.item)
 end
 
 local function Research(entry)
     for _, offer in ipairs(entry.offers) do
-        Enqueue(offer)
+        if Market.priced then
+            Enqueue(offer)
+        else
+            offer.status = Market.IDLE
+        end
     end
     Settle(entry)
 end
 
 local function FinishSearch(offer)
-    if searching == offer then
-        searching = nil
-        CancelTimer(searchTimer)
-    end
     Settle(offer.entry)
     Changed()
-    Pump()
+    ns.AuctionQueue:Done(searcher, offer.item)
 end
 
 local function Priced(offer, quantity, cost, base, beyond)
@@ -214,7 +210,7 @@ local function ReadItems(offer, itemKey)
 end
 
 local function Accepts(offer)
-    if not offer or offer.status == Market.QUEUED then return false end
+    if not offer or offer.status == Market.QUEUED or offer.status == Market.IDLE then return false end
     local entry = offer.entry
     return not (Busy(entry) and entry.offer == offer)
 end
@@ -303,7 +299,7 @@ function Market.Rebuild()
         end
     end
     Changed()
-    Pump()
+    ns.AuctionQueue:Pump()
 end
 
 function Market.Refresh()
@@ -311,7 +307,12 @@ function Market.Refresh()
         if not Busy(entry) then Research(entry) end
     end
     Changed()
-    Pump()
+    ns.AuctionQueue:Pump()
+end
+
+function Market.FindPrices()
+    Market.priced = true
+    Market.Refresh()
 end
 
 function Market.Pick(entry, rank)
@@ -332,7 +333,7 @@ local function EndPurchase(entry, research)
             if byFamily[entry.family.key] ~= entry then return end
             Research(entry)
             Changed()
-            Pump()
+            ns.AuctionQueue:Pump()
         end)
     end
     Changed()
@@ -434,11 +435,11 @@ local function OnItemPurchased(itemID)
 end
 
 local function Reset()
-    CancelTimer(searchTimer)
+    ns.AuctionQueue:Clear(searcher)
     CancelTimer(purchaseTimer)
     if buying and buying.offer.kind == COMMODITY then C_AuctionHouse.CancelCommoditiesPurchase() end
-    searching, buying = nil, nil
-    wipe(queue)
+    buying = nil
+    Market.priced = false
     wipe(entries)
     wipe(byFamily)
     wipe(byItem)
@@ -481,6 +482,7 @@ ns.Listen("SETTING_CHANGED", function(key)
     if not Market.open then return end
     if key == "auction" and not ns.db.auction then
         OnClosed()
+        ns.AuctionQueue:Pump()
     elseif key == nil or REBUILD_SETTINGS[key] then
         Market.Rebuild()
     elseif key == "priceStep" then
@@ -491,15 +493,6 @@ end)
 ns.Listen("LOGIN", function()
     ns.RegisterEvent("AUCTION_HOUSE_SHOW", OnShow)
     ns.RegisterEvent("AUCTION_HOUSE_CLOSED", OnClosed)
-    ns.RegisterEvent("AUCTION_HOUSE_THROTTLED_SYSTEM_READY", Pump)
-    ns.RegisterEvent("AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED", function()
-        local offer = searching
-        if not offer then return end
-        searching = nil
-        CancelTimer(searchTimer)
-        offer.status = Market.QUEUED
-        table.insert(queue, 1, offer)
-    end)
     ns.RegisterEvent("COMMODITY_SEARCH_RESULTS_UPDATED", OnCommodityResults)
     ns.RegisterEvent("ITEM_SEARCH_RESULTS_UPDATED", OnItemResults)
     ns.RegisterEvent("COMMODITY_PRICE_UPDATED", OnPriceUpdated)

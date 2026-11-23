@@ -60,7 +60,7 @@ Switch on the ones you carry at the bottom of the Scrolls tab and set how many t
 
 ## Auction house
 
-When you open the auction house, a panel next to it lists the scrolls you are short of, up to the stock you keep for each scroll (5 by default). Scrolls in the bank count toward it; switch off "Count scrolls in the bank" in the panel to buy the full stock for your bags. Buffs you cast yourself are left out.
+When you open the auction house, a panel next to it lists the scrolls you are short of, up to the stock you keep for each scroll (5 by default). Scrolls in the bank count toward it; switch off "Count scrolls in the bank" in the panel to buy the full stock for your bags. Buffs you cast yourself are left out. The panel asks for prices only when you press **Find prices**, so opening the auction house to sell things doesn't slow it down.
 
 - The strongest rank on sale is chosen by default. Under each scroll all four ranks are listed with their bonus and price per scroll; click another rank to buy it instead, and your pick is remembered. Ranks above your level, switched off or not for sale are shown locked. Hover a rank for how many are on sale at that price and what comes after.
 - The stock counts the rank you buy and higher ones. With 2 scrolls of rank IV and 3 of rank III you keep 2 of 5 rank IV scrolls, and the panel offers 3 more of rank IV. Pick rank III instead and the same bags hold 5 of 5.
