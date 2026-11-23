@@ -8,6 +8,7 @@ local W = ns.Widgets
 local Status = ns.Status
 local Inventory = ns.Inventory
 local Catalog = ns.Catalog
+local FloatingBar = ns.FloatingBar
 
 local Bar = {}
 ns.Bar = Bar
@@ -15,32 +16,21 @@ ns.Bar = Bar
 Bar.APPLY_BUTTON = "ReScrollApplyButton"
 Bar.BINDING = "CLICK " .. Bar.APPLY_BUTTON .. ":LeftButton"
 
-local PAD = 6
-local HEADER_HEIGHT, HEADER_GAP = 14, 5
-local HEADER_GLYPH_HEIGHT, HEADER_GLYPH_GAP = 11, 5
+local PAD = FloatingBar.PAD
 local NO_ACTION = "none"
 local APPLY_TEXT_PAD, APPLY_MIN_WIDTH = 12, 64
-local SCRIM_ALPHA = 0.85
-local LABEL_INSET = 3
-local ICON_CROP = 0.08
-local BORDER = 1
+local BORDER, LABEL_INSET = FloatingBar.BORDER, FloatingBar.LABEL_INSET
 local PRESS_INSET = 1
 local DOT_SIZE = 9
 local MOVE_TIME, FADE_TIME, SHOW_TIME = 0.2, 0.15, 0.18
-local HOVER_ALPHA = 0.14
 local EMPTY_ALPHA, GROUP_ALPHA = 0.45, 0.7
 local TIMER_INTERVAL = 1
 local READY_CHECK_SECONDS = 40
 local CONTROL_DELAY = 0.5
 local PULSE_ALPHA, PULSE_TIME, PULSE_LOOPS = 0.55, 0.35, 3
 local GLOW_OUTSET = 2
-local ROMAN = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII" }
-local BACKGROUND = { 0.078, 0.076, 0.072 }
-local PERCENT = 100
-local ICON_BACK = { 0, 0, 0, 0.7 }
-local STRATA = "MEDIUM"
 
-local holder, bar, header, title, applyButton, glow, pulse
+local floating, holder, bar, applyButton, glow, pulse
 local slots = {}
 local visible = {}
 local layoutMotion = {}
@@ -49,16 +39,9 @@ local timerTicker
 local pendingRefresh = false
 local readyUntil = 0
 local shown = false
-local moving = false
 
-local function InCombat()
-    return InCombatLockdown()
-end
-
-local function RomanRank(rank)
-    return ROMAN[rank.index] or tostring(rank.index)
-end
-Bar.RomanRank = RomanRank
+local RomanRank = Catalog.RomanRank
+local TooltipLine = W.TooltipLine
 
 local function FormatTime(seconds)
     seconds = math.max(0, math.floor(seconds))
@@ -67,7 +50,6 @@ local function FormatTime(seconds)
     end
     return tostring(seconds)
 end
-Bar.FormatTime = FormatTime
 
 local function Records()
     if ns.TestMode.active then return ns.TestMode.records, ns.TestMode.chain end
@@ -98,77 +80,61 @@ local function NoteUse(record)
     end
 end
 
-local function AddLine(text, color)
-    GameTooltip:AddLine(text, color[1], color[2], color[3], true)
-end
-
-local function AddStatusLines(record)
+local function AddStatusLine(record)
     local state = record.state
-    if state == Status.MISSING then
-        AddLine(L.TIP_MISSING, C.text)
-    elseif state == Status.EXPIRING then
-        AddLine(string.format(L.TIP_EXPIRING, FormatTime(record.expiration - GetTime())), C.warn)
-        if not record.rank then AddLine(L.TIP_NO_REFRESH, C.muted) end
+    if state == Status.EXPIRING and not record.rank then
+        TooltipLine(L.TIP_NO_REFRESH, C.muted)
     elseif state == Status.UPGRADE then
-        AddLine(string.format(L.TIP_UPGRADE, RomanRank(record.activeRank), RomanRank(record.rank)), C.good)
-    elseif state == Status.SELF then
-        AddLine(L.TIP_SELF, C.good)
+        TooltipLine(string.format(L.TIP_UPGRADE, RomanRank(record.activeRank), RomanRank(record.rank)), C.good)
     elseif state == Status.GROUP then
         local provider = record.provider
         local r, g, b = UI.ClassColor(provider.class)
-        AddLine(string.format(L.TIP_GROUP, CreateColor(r, g, b):WrapTextInColorCode(provider.name or "?")), C.text)
-        AddLine(L.TIP_GROUP_HINT, C.muted)
-    elseif state == Status.EMPTY then
-        AddLine(L.TIP_EMPTY, C.bad)
+        TooltipLine(string.format(L.TIP_GROUP, CreateColor(r, g, b):WrapTextInColorCode(provider.name or "?")), C.text)
     end
 end
 
-local countedRanks, lowerRanks, offeredRanks = {}, {}, {}
+local inBags, offeredRanks = {}, {}
 
-local function RankBreakdown(family, grade)
-    wipe(countedRanks)
-    wipe(lowerRanks)
+local function RanksInBags(family)
+    wipe(inBags)
     for _, rank in ipairs(Inventory.OfferRanks(family, UnitLevel("player"), offeredRanks)) do
         local count = Inventory.Count(rank.item)
-        if count > 0 then
-            local list = grade and rank.index >= grade.index and countedRanks or lowerRanks
-            list[#list + 1] = string.format(L.RANK_COUNT, RomanRank(rank), count)
-        end
+        if count > 0 then inBags[#inBags + 1] = string.format(L.RANK_COUNT, RomanRank(rank), count) end
     end
-    local counted = #countedRanks > 1 and table.concat(countedRanks, ", ") or nil
-    local lower = #lowerRanks > 0 and table.concat(lowerRanks, ", ") or nil
-    return counted, lower
+    return inBags
+end
+
+local function StockLine(family)
+    local grade = Inventory.StockRank(family)
+    local count = Inventory.StockCount(family, grade)
+    local target = Inventory.StockTarget(family)
+    if grade and grade ~= Inventory.TopUsableRank(family, UnitLevel("player")) then
+        return string.format(L.TIP_STOCK_FROM, count, target, RomanRank(grade))
+    end
+    return string.format(L.TIP_STOCK, count, target)
 end
 
 local function AddStockLines(record)
-    if record.spell then return end
     local family = record.family
-    local grade = Inventory.StockRank(family)
-    local count, bank = Inventory.StockCount(family, grade)
-    AddLine(string.format(L.TIP_STOCK, count, Inventory.StockTarget(family)), C.muted)
-    if grade and grade ~= Inventory.TopUsableRank(family, UnitLevel("player")) then
-        AddLine(string.format(L.TIP_STOCK_FROM, RomanRank(grade)), C.muted)
+    TooltipLine(StockLine(family), C.muted)
+    local ranks = RanksInBags(family)
+    if #ranks > 1 or (#ranks == 1 and record.rank ~= record.top) then
+        TooltipLine(string.format(L.TIP_BY_RANK, table.concat(ranks, ", ")), C.muted)
     end
-    local counted, lower = RankBreakdown(family, grade)
-    if counted then AddLine(string.format(L.TIP_BY_RANK, counted), C.muted) end
-    if lower then AddLine(string.format(L.TIP_LOWER_RANKS, lower), C.muted) end
-    if bank > 0 then AddLine(string.format(L.TIP_IN_BANK, bank), C.muted) end
-    if record.rank and record.rank ~= record.top then
-        AddLine(string.format(L.TIP_LOWER_RANK, RomanRank(record.rank), RomanRank(record.top)), C.warn)
-    end
+    local _, bank = Inventory.StockCount(family)
+    if bank > 0 then TooltipLine(string.format(L.TIP_IN_BANK, bank), C.muted) end
 end
 
-local function ShowRecordTooltip(owner, record, hint)
+local function ShowRecordTooltip(owner, record)
     GameTooltip:SetOwner(owner, UI.VerticalAnchor(owner))
     if record.spell then
         GameTooltip:SetSpellByID(record.spell)
     else
         GameTooltip:SetItemByID((record.rank or record.top).item)
+        GameTooltip:AddLine(" ")
+        AddStatusLine(record)
+        AddStockLines(record)
     end
-    GameTooltip:AddLine(" ")
-    AddStatusLines(record)
-    AddStockLines(record)
-    if hint then AddLine(L[hint], C.muted) end
     GameTooltip:Show()
 end
 
@@ -184,11 +150,7 @@ local function PaintCooldown(slot)
     elseif record.rank then
         start, duration = Inventory.Cooldown(record.rank.item)
     end
-    if duration > 0 then
-        slot.cooldown:SetCooldown(start, duration)
-    else
-        slot.cooldown:Clear()
-    end
+    FloatingBar.SetCooldown(slot, start, duration)
 end
 
 local function PaintTimer(slot)
@@ -201,12 +163,6 @@ local function PaintTimer(slot)
         slot.timer:Hide()
         slot.timerScrim:Hide()
     end
-end
-
-local function CountColor(record, stock)
-    if stock == 0 then return C.bad end
-    if stock < Inventory.StockTarget(record.family) then return C.warn end
-    return C.text
 end
 
 local function SlotCount(record, rank)
@@ -237,7 +193,7 @@ local function PaintSlot(slot)
     slot.count:SetShown(count ~= nil and ns.db.showCounts)
     if count then
         slot.count:SetText(count)
-        slot.count:SetTextColor(unpack(CountColor(record, stock)))
+        slot.count:SetTextColor(unpack(FloatingBar.CountColor(record.family, stock)))
     end
 
     slot.scrim:SetShown(slot.rankText:IsShown() or slot.count:IsShown())
@@ -250,88 +206,18 @@ local function PaintSlot(slot)
     PaintCooldown(slot)
 end
 
-local function Highlight(slot, on)
-    UI.Tween(slot.hover, on and HOVER_ALPHA or 0, 0.12, function(_, value) slot.highlight:SetAlpha(value) end)
-end
-
-local function SavePosition()
-    local point, _, _, x, y = holder:GetPoint(1)
-    local position = ns.db.position
-    position.point, position.x, position.y = point, x, y
-end
-
-local function StartMoving()
-    if ns.db.locked or InCombat() then return false end
-    moving = true
-    holder:Raise()
-    holder:StartMoving()
-end
-
-local function StopMoving()
-    if not moving then return end
-    moving = false
-    holder:StopMovingOrSizing()
-    SavePosition()
-end
-
-local function StartAltMoving()
-    if not IsAltKeyDown() then return false end
-    GameTooltip:Hide()
-    return StartMoving()
-end
-
-local function SetUpButton(button)
-    button:RegisterForClicks("AnyUp", "AnyDown")
-    button:SetAttribute("unit", "player")
-    button:SetAttribute("*type2", NO_ACTION)
-    button:SetAttribute("alt-type1", NO_ACTION)
-    W.DragHandle(button, StartAltMoving, StopMoving)
-end
-
 local function OnPreClick(self, button, down)
     if button == "LeftButton" and down and not IsAltKeyDown() then NoteUse(self.record) end
 end
 
 local function CreateSlot(index)
-    local slot = CreateFrame("Button", "ReScrollSlot" .. index, bar, "SecureActionButtonTemplate")
-    SetUpButton(slot)
-    slot:Hide()
+    local slot = floating:CreateButton("ReScrollSlot" .. index)
+    slot:SetAttribute("unit", "player")
     slot:SetAlpha(0)
-
-    slot.art = CreateFrame("Frame", nil, slot)
-    slot.art:SetAllPoints()
-    UI.Fill(slot.art, ICON_BACK)
-    slot.icon = slot.art:CreateTexture(nil, "ARTWORK")
-    slot.icon:SetPoint("TOPLEFT", BORDER, -BORDER)
-    slot.icon:SetPoint("BOTTOMRIGHT", -BORDER, BORDER)
-    slot.icon:SetTexCoord(ICON_CROP, 1 - ICON_CROP, ICON_CROP, 1 - ICON_CROP)
-
-    slot.cooldown = CreateFrame("Cooldown", nil, slot, "CooldownFrameTemplate")
-    slot.cooldown:SetAllPoints(slot.icon)
-    slot.cooldown:SetDrawEdge(false)
-    slot.cooldown:SetHideCountdownNumbers(true)
-
-    local overlay = CreateFrame("Frame", nil, slot)
-    overlay:SetAllPoints()
-    overlay:SetFrameLevel(slot.cooldown:GetFrameLevel() + 1)
-    slot.highlight = UI.Fill(overlay, { 1, 1, 1, 1 }, "ARTWORK")
-    slot.highlight:SetPoint("TOPLEFT", BORDER, -BORDER)
-    slot.highlight:SetPoint("BOTTOMRIGHT", -BORDER, BORDER)
-    slot.highlight:SetAlpha(0)
-    slot.hover = {}
-
-    slot.scrim = overlay:CreateTexture(nil, "BACKGROUND")
-    slot.scrim:SetColorTexture(1, 1, 1, 1)
-    slot.scrim:SetGradient("VERTICAL", CreateColor(0, 0, 0, SCRIM_ALPHA), CreateColor(0, 0, 0, 0))
-    slot.scrim:SetPoint("TOPLEFT", slot, "LEFT", BORDER, 0)
-    slot.scrim:SetPoint("BOTTOMRIGHT", -BORDER, BORDER)
+    local overlay = slot.overlay
     slot.rankText = UI.BoldText(overlay, T.caption, C.text)
     slot.rankText:SetPoint("BOTTOMLEFT", LABEL_INSET, LABEL_INSET)
-    slot.count = UI.BoldText(overlay, T.body, C.text)
-    slot.count:SetPoint("BOTTOMRIGHT", -LABEL_INSET, LABEL_INSET - 1)
-    slot.timerScrim = overlay:CreateTexture(nil, "BACKGROUND")
-    slot.timerScrim:SetColorTexture(1, 1, 1, 1)
-    slot.timerScrim:SetGradient("VERTICAL", CreateColor(0, 0, 0, 0), CreateColor(0, 0, 0, SCRIM_ALPHA))
+    slot.timerScrim = FloatingBar.Scrim(overlay, true)
     slot.timerScrim:SetPoint("TOPLEFT", BORDER, -BORDER)
     slot.timerScrim:SetPoint("BOTTOMRIGHT", slot, "RIGHT", -BORDER, 0)
     slot.timerScrim:Hide()
@@ -344,25 +230,12 @@ local function CreateSlot(index)
     slot.fade = {}
     slot:SetScript("PreClick", OnPreClick)
     slot:SetScript("PostClick", function(self, button, down)
-        if button == "RightButton" and not down and self.record and not ns.TestMode.active and not InCombat() then
+        if button == "RightButton" and not down and self.record and not ns.TestMode.active and not InCombatLockdown() then
             Status.Snooze(self.record.family)
         end
     end)
     slot:HookScript("OnEnter", function(self)
-        Highlight(self, true)
-        if self.record then ShowRecordTooltip(self, self.record, "TIP_SNOOZE") end
-    end)
-    slot:HookScript("OnLeave", function(self)
-        Highlight(self, false)
-        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
-    end)
-    slot:HookScript("OnMouseDown", function(self)
-        self.icon:SetPoint("TOPLEFT", BORDER + PRESS_INSET, -BORDER - PRESS_INSET)
-        self.icon:SetPoint("BOTTOMRIGHT", -BORDER - PRESS_INSET, BORDER + PRESS_INSET)
-    end)
-    slot:HookScript("OnMouseUp", function(self)
-        self.icon:SetPoint("TOPLEFT", BORDER, -BORDER)
-        self.icon:SetPoint("BOTTOMRIGHT", -BORDER, BORDER)
+        if self.record then ShowRecordTooltip(self, self.record) end
     end)
     slots[index] = slot
     return slot
@@ -379,46 +252,23 @@ end
 
 local function CreateApplyButton()
     applyButton = CreateFrame("Button", Bar.APPLY_BUTTON, bar, "SecureActionButtonTemplate")
-    SetUpButton(applyButton)
+    applyButton:RegisterForClicks("AnyUp", "AnyDown")
+    applyButton:SetAttribute("unit", "player")
+    applyButton:SetAttribute("*type2", NO_ACTION)
+    applyButton:SetAttribute("alt-type1", NO_ACTION)
+    W.DragHandle(applyButton, function()
+        if not IsAltKeyDown() then return false end
+        return floating:StartMoving()
+    end, function() floating:StopMoving() end)
     local fill = applyButton:CreateTexture(nil, "BACKGROUND")
     fill:SetAllPoints()
-    W.HoverFill(applyButton, fill, C.accent, { 0.973, 0.792, 0.420, 1 })
+    W.HoverFill(applyButton, fill, C.accent, C.accentHover)
     applyButton.label = UI.BoldText(applyButton, T.label, C.onAccent)
     applyButton.label:SetPoint("CENTER")
     applyButton.fade = {}
     applyButton:SetScript("PreClick", OnPreClick)
     applyButton:HookScript("OnMouseDown", function(self) self.label:SetPoint("CENTER", 0, -PRESS_INSET) end)
     applyButton:HookScript("OnMouseUp", function(self) self.label:SetPoint("CENTER", 0, 0) end)
-end
-
-local function CreateHeader()
-    header = CreateFrame("Frame", nil, bar)
-    header:SetHeight(HEADER_HEIGHT)
-    header:SetPoint("TOPLEFT", PAD, -PAD)
-    header:SetPoint("TOPRIGHT", -PAD, -PAD)
-    header:EnableMouse(true)
-    local glyph = UI.AddonGlyph(header, HEADER_GLYPH_HEIGHT)
-    glyph:SetPoint("LEFT")
-    title = UI.BoldText(header, T.label, C.text)
-    title:SetPoint("LEFT", glyph, "RIGHT", HEADER_GLYPH_GAP, 0)
-    header:SetScript("OnEnter", function(self)
-        W.ShowHint(self, ns.db.locked and "HEADER_LOCKED_DESC" or "HEADER_DESC")
-    end)
-    header:SetScript("OnLeave", W.HideHint)
-    header:SetScript("OnMouseUp", function(_, button)
-        if button == "RightButton" then
-            ns.Options.Toggle()
-        elseif button == "MiddleButton" and not ns.db.locked then
-            Bar.ResetPosition()
-        end
-    end)
-    W.DragHandle(header, StartMoving, StopMoving)
-end
-
-function Bar.ResetPosition()
-    local position, default = ns.db.position, ns.DEFAULTS.position
-    position.point, position.x, position.y = default.point, default.x, default.y
-    ns.Fire("SETTING_CHANGED", "position")
 end
 
 local function CreatePulse()
@@ -444,49 +294,38 @@ local function CreatePulse()
     end)
 end
 
-local function PaintBackground()
-    bar.background:SetAlpha(ns.db.barBackground / PERCENT)
+local function AnchorBar(frame, anchor)
+    frame:ClearAllPoints()
+    local grow = ns.db.grow
+    if grow == "LEFT" then
+        frame:SetPoint("TOPRIGHT", anchor, "CENTER")
+    elseif grow == "CENTER" then
+        frame:SetPoint("TOP", anchor, "CENTER")
+    else
+        frame:SetPoint("TOPLEFT", anchor, "CENTER")
+    end
 end
 
 local function Create()
-    holder = CreateFrame("Frame", "ReScrollHolder", UIParent)
-    holder:SetSize(1, 1)
-    holder:SetMovable(true)
-    holder:SetClampedToScreen(true)
-    holder:SetFrameStrata(STRATA)
-    holder:SetToplevel(true)
+    floating = FloatingBar.Create({
+        holderName = "ReScrollHolder",
+        barName = "ReScrollBar",
+        positionKey = "position",
+        anchorBar = AnchorBar,
+        hint = "BAR_HEADER_DESC",
+        onSettings = function() ns.Options.Toggle() end,
+    })
+    Bar.floating = floating
+    holder, bar = floating.holder, floating.bar
     RegisterStateDriver(holder, "visibility", "[combat] hide; show")
-
-    bar = CreateFrame("Frame", "ReScrollBar", holder)
     bar:Hide()
     bar:SetAlpha(0)
-    bar.background = UI.Fill(bar, BACKGROUND)
-    PaintBackground()
     CreatePulse()
-    CreateHeader()
     CreateApplyButton()
     for index = 1, #ns.FAMILIES do
         CreateSlot(index)
     end
-end
-
-local function PlaceHolder()
-    local position = ns.db.position
-    holder:ClearAllPoints()
-    holder:SetPoint(position.point, UIParent, position.point, position.x, position.y)
-    bar:ClearAllPoints()
-    local grow = ns.db.grow
-    if grow == "LEFT" then
-        bar:SetPoint("TOPRIGHT", holder, "CENTER")
-    elseif grow == "CENTER" then
-        bar:SetPoint("TOP", holder, "CENTER")
-    else
-        bar:SetPoint("TOPLEFT", holder, "CENTER")
-    end
-end
-
-local function RowTop()
-    return PAD + (ns.db.showHeader and HEADER_HEIGHT + HEADER_GAP or 0)
+    floating:Place()
 end
 
 local function ApplyLayout(_, t)
@@ -508,7 +347,7 @@ local function HideSlot(slot)
     if not slot:IsShown() then return end
     slot.leaving = true
     FadeSlot(slot, 0, function()
-        if slot.leaving and not InCombat() then
+        if slot.leaving and not InCombatLockdown() then
             slot.leaving = false
             slot:Hide()
         end
@@ -538,12 +377,11 @@ end
 local function Layout(animate)
     local records, chain = Records()
     local size, gap = ns.db.iconSize, ns.db.spacing
-    header:SetShown(ns.db.showHeader)
-    title:SetText(L.HEADER)
+    floating:PaintHeader("HEADER")
     PaintApply(chain)
 
     wipe(visible)
-    local top, left = RowTop(), PAD
+    local top, left = floating:RowTop(), PAD
     local hasApply = #chain > 0
     applyButton:SetShown(hasApply)
     if hasApply then
@@ -638,7 +476,7 @@ local function SetBarShown(want)
         UI.Tween(barFade, 1, SHOW_TIME, ApplyBarAlpha)
     else
         UI.Tween(barFade, 0, SHOW_TIME, ApplyBarAlpha, function()
-            if not shown and not InCombat() then bar:Hide() end
+            if not shown and not InCombatLockdown() then bar:Hide() end
         end)
     end
 end
@@ -659,7 +497,7 @@ end
 
 function Bar.Refresh(animate)
     if not holder then return end
-    if InCombat() then
+    if InCombatLockdown() then
         pendingRefresh = true
         return
     end
@@ -699,26 +537,18 @@ local function OnCombatStart()
     for _, slot in ipairs(slots) do UI.StopTween(slot.fade) end
 end
 
-function Bar.Pulse()
-    if pulse then pulse:Play() end
-end
-
 ns.Listen("STATUS_CHANGED", RefreshAnimated)
 ns.Listen("TEST_MODE_CHANGED", RefreshAnimated)
 ns.Listen("OPTIONS_SHOWN", RefreshAnimated)
 ns.Listen("LOCALE_CHANGED", function() Bar.Refresh(false) end)
 ns.Listen("SETTING_CHANGED", function(key)
     if not holder then return end
-    if key == nil or key == "barBackground" then PaintBackground() end
-    if key == nil or key == "position" or key == "grow" then
-        if not InCombat() then PlaceHolder() end
-    end
+    if key == "grow" then floating:Place() end
     Bar.Refresh(false)
 end)
 
 ns.Listen("LOGIN", function()
     Create()
-    PlaceHolder()
     ns.RegisterEvent("PLAYER_DEAD", RefreshAnimated)
     ns.RegisterEvent("PLAYER_ALIVE", RefreshAnimated)
     ns.RegisterEvent("PLAYER_UNGHOST", RefreshAnimated)
@@ -730,7 +560,6 @@ ns.Listen("LOGIN", function()
     ns.RegisterEvent("GROUP_ROSTER_UPDATE", RefreshAnimated)
     ns.RegisterEvent("PLAYER_REGEN_DISABLED", OnCombatStart)
     ns.RegisterEvent("PLAYER_REGEN_ENABLED", function()
-        StopMoving()
         FinishHiding()
         if pendingRefresh then Bar.Refresh(false) end
     end)

@@ -41,7 +41,6 @@ SidePanel.ROW_WIDTH = WIDTH - PAD * 2
 SidePanel.TEXT_INDENT = ICON_SIZE + 10
 SidePanel.HEAD_HEIGHT = HEAD_HEIGHT
 SidePanel.DISABLED_ALPHA = DISABLED_ALPHA
-SidePanel.HAIRLINE = HAIRLINE
 
 local function Coin(amount, coin)
     return amount .. coin.color .. L[coin.key] .. "|r"
@@ -170,8 +169,6 @@ local function CreateFooter(panel, opts)
     if opts.onAction then
         panel.action = W.Button(panel, nil, opts.onAction, "primary")
         panel.action:SetPoint("BOTTOMRIGHT", -PAD, PAD)
-        panel.action:HookScript("OnEnter", function(self) W.ShowHint(self, opts.actionHint) end)
-        panel.action:HookScript("OnLeave", W.HideHint)
     end
     panel.footerText = UI.Text(panel, T.body, C.text)
     panel.footerText:SetPoint("LEFT", panel, "BOTTOMLEFT", PAD, PAD + BUTTON_HEIGHT / 2)
@@ -202,10 +199,6 @@ function PanelMixin:Offset()
     return ns.db[offset.x], ns.db[offset.y]
 end
 
-function PanelMixin:Dock()
-    ns.Dock:Layout()
-end
-
 function PanelMixin:Layer()
     local host = ns.Dock:Host(self)
     if not host then
@@ -220,7 +213,7 @@ function PanelMixin:Open()
     if self.toggle then self.toggle:Refresh(false) end
     self:Layer()
     UI.FadeIn(self, FADE_TIME)
-    self:Dock()
+    ns.Dock:Layout()
 end
 
 function PanelMixin:ListTop()
@@ -242,7 +235,6 @@ function PanelMixin:PaintRows(entries, create, paint)
         paint(row, fresh)
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 0, -y)
-        row.divider:SetShown(index > 1)
         y = y + row:GetHeight() + ROW_GAP
         if fresh then FadeInRow(row) end
         row:Show()
@@ -286,7 +278,7 @@ function PanelMixin:EndDrag()
         ns.Set(self.offset.y, y + Round(self:GetTop() - self.dragTop))
     end
     self.dragLeft, self.dragTop = nil, nil
-    self:Dock()
+    ns.Dock:Layout()
 end
 
 local function MakeMovable(panel, opts)
@@ -301,7 +293,7 @@ local function MakeMovable(panel, opts)
         offset = function() return panel:Offset() end,
     })
     ns.Listen("SETTING_CHANGED", function(key)
-        if panel:IsShown() and (key == nil or key == offset.x or key == offset.y) then panel:Dock() end
+        if panel:IsShown() and (key == nil or key == offset.x or key == offset.y) then ns.Dock:Layout() end
     end)
 end
 
@@ -364,10 +356,6 @@ function SidePanel.NewRow(panel, onButton, tooltipItem)
     row:SetSize(SidePanel.ROW_WIDTH, HEAD_HEIGHT)
     row.tooltipItem = tooltipItem
     row.fade = {}
-
-    row.divider = Hairline(row)
-    row.divider:SetPoint("TOPLEFT", 0, ROW_GAP / 2)
-    row.divider:SetPoint("TOPRIGHT", 0, ROW_GAP / 2)
 
     local head = CreateFrame("Frame", nil, row)
     head:SetPoint("TOPLEFT")

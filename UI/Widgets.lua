@@ -93,6 +93,10 @@ local function HideHint(owner)
     if GameTooltip:IsOwned(owner) then GameTooltip:Hide() end
 end
 Widgets.ShowHint = ShowHint
+
+function Widgets.TooltipLine(text, color)
+    GameTooltip:AddLine(text, color[1], color[2], color[3], true)
+end
 Widgets.HideHint = HideHint
 
 function Widgets.DragHandle(handle, start, stop)
@@ -144,8 +148,8 @@ end
 
 local BUTTON_STYLES = {
     default = { fill = C.control, hover = C.controlHover, text = C.text },
-    primary = { fill = C.accent, hover = { 0.973, 0.792, 0.420, 1 }, text = C.onAccent },
-    danger = { fill = C.control, hover = { 0.333, 0.180, 0.165, 1 }, text = C.bad },
+    primary = { fill = C.accent, hover = C.accentHover, text = C.onAccent },
+    danger = { fill = C.control, hover = C.dangerHover, text = C.bad },
 }
 
 function Widgets.Button(parent, key, onClick, style, width)
@@ -263,6 +267,9 @@ function Widgets.Toggle(parent, width, opts)
     return row
 end
 
+local SLIDER_HEIGHT = 34
+local SLIDER_BOX_WIDTH, SLIDER_BOX_HEIGHT, SLIDER_BOX_GAP = 40, 18, 8
+
 local function Snap(value, opts)
     value = math.floor((value - opts.min) / opts.step + 0.5) * opts.step + opts.min
     return math.max(opts.min, math.min(opts.max, value))
@@ -274,17 +281,20 @@ local function FormatValue(value, opts)
 end
 
 function Widgets.Slider(parent, width, opts)
+    local compact = opts.label == nil
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(width, 34)
-    local label = UI.Text(row, T.label, C.muted)
-    label:SetPoint("TOPLEFT", 0, -2)
-    label:SetPoint("RIGHT", -42, 0)
-    label:SetJustifyH("LEFT")
-    Widgets.Bind(label, opts.label)
+    row:SetSize(width, compact and SLIDER_BOX_HEIGHT or SLIDER_HEIGHT)
+    if not compact then
+        local label = UI.Text(row, T.label, C.muted)
+        label:SetPoint("TOPLEFT", 0, -2)
+        label:SetPoint("RIGHT", -(SLIDER_BOX_WIDTH + 2), 0)
+        label:SetJustifyH("LEFT")
+        Widgets.Bind(label, opts.label)
+    end
 
     local box = CreateFrame("EditBox", nil, row)
-    box:SetSize(40, 18)
-    box:SetPoint("TOPRIGHT", 0, 1)
+    box:SetSize(SLIDER_BOX_WIDTH, SLIDER_BOX_HEIGHT)
+    box:SetPoint("TOPRIGHT", 0, compact and 0 or 1)
     box:SetAutoFocus(false)
     box:SetJustifyH("RIGHT")
     box:SetTextInsets(3, 3, 0, 0)
@@ -294,8 +304,13 @@ function Widgets.Slider(parent, width, opts)
     boxFill:SetAlpha(0)
 
     local track = CreateFrame("Frame", nil, row)
-    track:SetPoint("BOTTOMLEFT", THUMB_HOVER_SIZE / 2, 0)
-    track:SetPoint("BOTTOMRIGHT", -THUMB_HOVER_SIZE / 2, 0)
+    if compact then
+        track:SetPoint("LEFT", THUMB_HOVER_SIZE / 2, 0)
+        track:SetPoint("RIGHT", box, "LEFT", -(THUMB_HOVER_SIZE / 2 + SLIDER_BOX_GAP), 0)
+    else
+        track:SetPoint("BOTTOMLEFT", THUMB_HOVER_SIZE / 2, 0)
+        track:SetPoint("BOTTOMRIGHT", -THUMB_HOVER_SIZE / 2, 0)
+    end
     track:SetHeight(12)
     track:EnableMouse(true)
     local rail = track:CreateTexture(nil, "ARTWORK")
@@ -320,7 +335,7 @@ function Widgets.Slider(parent, width, opts)
     local function Paint(value)
         local ratio = (value - opts.min) / (opts.max - opts.min)
         local span = track:GetWidth()
-        if span <= 0 then span = width - THUMB_HOVER_SIZE end
+        if span <= 0 then span = width - THUMB_HOVER_SIZE - (compact and SLIDER_BOX_WIDTH + SLIDER_BOX_GAP or 0) end
         fill:SetWidth(math.max(0.001, span * ratio))
         thumb:SetPoint("CENTER", track, "LEFT", span * ratio, 0)
         if not box:HasFocus() then

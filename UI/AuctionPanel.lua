@@ -9,14 +9,10 @@ local Market = ns.Market
 local Catalog = ns.Catalog
 local SidePanel = ns.SidePanel
 
-local AuctionPanel = {}
-ns.AuctionPanel = AuctionPanel
-
 local STRIP_HEIGHT, STRIP_TOP = 36, 8
 local UNDERLINE_HEIGHT = 2
 local SEGMENT_INSET, LINE_INSET, BONUS_GAP = 7, 5, 5
 local SLIDE_TIME = 0.18
-local SELECTED_FILL = { 0.243, 0.235, 0.220, 1 }
 local SEGMENT_HOVER = { 1, 1, 1, 0.05 }
 local CLEAR = { 1, 1, 1, 0 }
 
@@ -85,9 +81,7 @@ local function OnSale(offer)
     return offer ~= nil and offer.status == Market.READY
 end
 
-local function AddLine(text, color)
-    GameTooltip:AddLine(text, color[1], color[2], color[3], true)
-end
+local AddLine = W.TooltipLine
 
 local function LockLines(segment)
     local offer, rank = segment.offer, segment.rank
@@ -109,13 +103,11 @@ local function ShowSegmentTooltip(segment)
     else
         AddLine(string.format(L.AH_PER_SCROLL, Money(offer.unitCost)), C.text)
         if offer.quantity > 0 then
-            AddLine(string.format(L.AH_TIP_AVAILABLE, offer.quantity), C.muted)
             AddLine(string.format(L.AH_TIP_TOTAL, offer.quantity, Money(offer.cost)), C.muted)
         else
             AddLine(L.AH_TIP_ENOUGH, C.muted)
         end
         if offer.beyond then AddLine(string.format(L.AH_TIP_BEYOND, Money(offer.beyond)), C.warn) end
-        if offer.entry.offer ~= offer then AddLine(L.AH_TIP_PICK, C.accent) end
     end
     GameTooltip:Show()
 end
@@ -163,7 +155,7 @@ end
 
 local function PaintSegment(segment, rank, offer, chosen, busy)
     segment.rank, segment.offer = rank, offer
-    segment.rankText:SetText(ns.Bar.RomanRank(rank))
+    segment.rankText:SetText(Catalog.RomanRank(rank))
     segment.rankText:SetTextColor(unpack(chosen and C.accent or C.text))
     segment.bonus:SetText(string.format(L.STAT_BONUS, rank.amount))
     local text, color = SegmentPrice(rank, offer)
@@ -233,7 +225,7 @@ local function CreateStrip(row)
     strip:SetHeight(STRIP_HEIGHT)
     SidePanel.AddBackground(strip, C.control)
     row.selection = strip:CreateTexture(nil, "ARTWORK")
-    row.selection:SetColorTexture(unpack(SELECTED_FILL))
+    row.selection:SetColorTexture(unpack(C.selected))
     row.selection:SetHeight(STRIP_HEIGHT)
     row.selection:Hide()
     row.underline = strip:CreateTexture(nil, "OVERLAY")
@@ -295,10 +287,6 @@ local function Create()
         offset = { x = "auctionX", y = "auctionY" },
         settingsPage = "auction",
     })
-end
-
-function AuctionPanel.IsShown()
-    return panel ~= nil and panel:IsShown()
 end
 
 ns.Listen("MARKET_SHOWN", function(open)

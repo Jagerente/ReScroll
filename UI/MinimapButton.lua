@@ -64,9 +64,8 @@ local function ShowTooltip(self)
     if self.dragging then return end
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:SetText(ns.TITLE, 1, 1, 1)
-    GameTooltip:AddLine(L.MINIMAP_LEFT_CLICK, 0.9, 0.9, 0.9)
-    GameTooltip:AddLine(L.MINIMAP_RIGHT_CLICK, 0.9, 0.9, 0.9)
-    GameTooltip:AddLine(L.MINIMAP_DRAG, 0.6, 0.6, 0.6)
+    GameTooltip:AddLine(L.MINIMAP_LEFT_CLICK, unpack(ns.UI.COLORS.muted))
+    GameTooltip:AddLine(L.MINIMAP_RIGHT_CLICK, unpack(ns.UI.COLORS.muted))
     GameTooltip:Show()
 end
 

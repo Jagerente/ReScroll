@@ -99,10 +99,6 @@ function Auras.Expiration(spellID)
     return active[spellID]
 end
 
-function Auras.IsReliable()
-    return not dirty
-end
-
 function Auras.CollectHelpful(out)
     wipe(out)
     for index = 1, MAX_AURAS do

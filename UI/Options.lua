@@ -190,8 +190,6 @@ local function CreateRowHead(row, list)
         W.SetSwitchHover(row.switch, true)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetItemByID(row.family.top.item)
-        GameTooltip:AddLine(" ")
-        GameTooltip:AddLine(L[list.hint], unpack(C.muted))
         GameTooltip:Show()
     end)
     head:HookScript("OnLeave", function(self)
@@ -212,7 +210,7 @@ local function CreateScrollRow(list, family)
     row.family = family
     CreateRowHead(row, list)
     row.stockOptions = {
-        label = "STOCK", min = 0, max = StockMax(family), step = 1,
+        min = 0, max = StockMax(family), step = 1,
         get = function() return Inventory.StockTarget(row.family) end,
         set = function(value) Inventory.SetStockTarget(row.family, value) end,
     }
@@ -295,10 +293,10 @@ local function EnableReorder(list)
     end
 end
 
-local function AddScrollList(page, families, hint, reorder)
+local function AddScrollList(page, families, reorder)
     local list = CreateFrame("Frame", nil, page.content)
     list:SetWidth(PAGE_WIDTH)
-    list.rows, list.families, list.hint = {}, families, hint
+    list.rows, list.families = {}, families
     if reorder then EnableReorder(list) end
     function list:Refresh(animate)
         local y = 0
@@ -326,10 +324,9 @@ end
 local function AddUtilitySection(page)
     page.sections.utility = AddHeading(page, "SECTION_UTILITY")
     AddParagraph(page, "UTILITY_EXPLAIN", 0)
-    local list = AddScrollList(page, Catalog.utilities, "UTILITY_ROW_DESC")
+    local list = AddScrollList(page, Catalog.utilities)
     AddSegmented(page, "utilityVisibility", "UTILITY_VISIBILITY", UTILITY_VISIBILITY_MODES, SECTION_GAP)
-    AddParagraph(page, "UTILITY_VISIBILITY_EXPLAIN", 6)
-    page.stack:Add(W.Button(page.content, "UTILITY_RECENTER", function() ns.UtilityBar.ResetPosition() end), 12)
+    page.stack:Add(W.Button(page.content, "UTILITY_RECENTER", function() ns.UtilityBar.floating:ResetPosition() end), 12)
     return list
 end
 
@@ -337,7 +334,7 @@ local function BuildScrolls()
     local page = NewPage("scrolls")
     AddHeading(page, "SECTION_FAMILIES")
     AddParagraph(page, "FAMILIES_EXPLAIN", 0)
-    local list = AddScrollList(page, Catalog.ordered, "FAMILY_ROW_DESC", true)
+    local list = AddScrollList(page, Catalog.ordered, true)
 
     AddHeading(page, "SECTION_RULES")
     AddToggle(page, "groupBuffs", "GROUP_BUFFS", "GROUP_BUFFS_DESC")
@@ -362,9 +359,7 @@ local AUTO = "auto"
 local DOCK_SIDE_GAP, DOCK_TEXT_GAP = 10, 8
 local DOCK_PAGES = { "auction", "bank" }
 
-local function DockPlacement(slot)
-    return ns.SidePanel.Placement(slot)
-end
+local DockPlacement = ns.SidePanel.Placement
 
 local function DockTargets(slot)
     local items = {
@@ -406,10 +401,6 @@ local function DockStatus(slot)
     return text
 end
 
-local function DockFamily(slot)
-    return string.format(L.DOCK_EXPLAIN, table.concat(ns.Dock:Family(slot), ", "))
-end
-
 local function DockSides()
     local list = {}
     for index, side in ipairs(ns.Dock.SIDES) do
@@ -445,7 +436,6 @@ local function AddDockControls(page, slot)
         paintStatus(self)
     end
     status:Refresh()
-    AddLiveText(page, function() return DockFamily(slot) end, C.muted, PARAGRAPH_GAP)
 end
 
 ns.Dock:OnChange(function()
@@ -460,7 +450,6 @@ local function BuildAuction()
     AddHeading(page, "SECTION_AUCTION")
     AddToggle(page, "auction", "AUCTION", "AUCTION_DESC")
     AddToggle(page, "countBank", "COUNT_BANK", "COUNT_BANK_DESC")
-    AddParagraph(page, "BUY_RANK_EXPLAIN", 6)
 
     AddHeading(page, "SECTION_PRICES")
     AddSlider(page, "priceStep", "PRICE_STEP", 0, PERCENT_MAX, FormatPercent)
@@ -470,20 +459,18 @@ local function BuildAuction()
     AddDockControls(page, "auction")
     AddSlider(page, "auctionX", "OFFSET_X", -PANEL_OFFSET, PANEL_OFFSET)
     AddSlider(page, "auctionY", "OFFSET_Y", -PANEL_OFFSET, PANEL_OFFSET)
-    AddParagraph(page, "AUCTION_OFFSET_EXPLAIN", 6)
 end
 
 local function BuildBank()
     local page = NewPage("bank")
     AddHeading(page, "SECTION_BANK")
     AddToggle(page, "bank", "BANK", "BANK_DESC")
-    AddToggle(page, "bankAuto", "BANK_AUTO", "BANK_AUTO_DESC")
+    AddToggle(page, "bankAuto", "BANK_AUTO")
 
     AddHeading(page, "SECTION_PLACEMENT")
     AddDockControls(page, "bank")
     AddSlider(page, "bankX", "OFFSET_X", -PANEL_OFFSET, PANEL_OFFSET)
     AddSlider(page, "bankY", "OFFSET_Y", -PANEL_OFFSET, PANEL_OFFSET)
-    AddParagraph(page, "BANK_OFFSET_EXPLAIN", 6)
 end
 
 local VISIBILITY_MODES = {
@@ -507,7 +494,7 @@ local function AddReadyCheckToggle(page)
 end
 
 local function AddRecenterButton(page)
-    local button = W.Button(page.content, "RECENTER", function() ns.Bar.ResetPosition() end)
+    local button = W.Button(page.content, "RECENTER", function() ns.Bar.floating:ResetPosition() end)
     page.stack:Add(button, 12)
 end
 
@@ -517,7 +504,7 @@ local function BuildPanel()
     AddSegmented(page, "visibility", "VISIBILITY", VISIBILITY_MODES)
     AddParagraph(page, "VISIBILITY_EXPLAIN", 6)
     AddReadyCheckToggle(page)
-    AddToggle(page, "hideResting", "HIDE_RESTING", "HIDE_RESTING_DESC")
+    AddToggle(page, "hideResting", "HIDE_RESTING")
 
     AddHeading(page, "SECTION_LOOK")
     AddSlider(page, "iconSize", "ICON_SIZE", 24, 56, nil, 4)
@@ -526,8 +513,7 @@ local function BuildPanel()
     AddSegmented(page, "grow", "GROW", GROW_MODES, SLIDER_GAP)
     AddToggle(page, "showHeader", "SHOW_HEADER", "SHOW_HEADER_DESC")
     AddToggle(page, "showCounts", "SHOW_COUNTS", "SHOW_COUNTS_DESC")
-    AddToggle(page, "locked", "LOCKED", "LOCKED_DESC")
-    AddParagraph(page, "MOVE_EXPLAIN", 6)
+    AddToggle(page, "locked", "LOCKED")
     AddRecenterButton(page)
 
     AddHeading(page, "SECTION_BACKGROUND")
@@ -571,7 +557,7 @@ local function BuildGeneral()
         label = "APPLY_KEY", desc = "APPLY_KEY_DESC", binding = ns.Bar.BINDING,
     })))
     page.stack:Add(Track(page, W.Toggle(page.content, PAGE_WIDTH, {
-        label = "MINIMAP_BUTTON", desc = "MINIMAP_BUTTON_DESC",
+        label = "MINIMAP_BUTTON",
         get = function() return not ns.db.minimap.hide end,
         set = ns.MinimapButton.SetShown,
     })))

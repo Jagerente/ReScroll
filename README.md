@@ -24,17 +24,17 @@ Each character gets its own set. Stamina and Protection are on for every class, 
 - Warlock: Intellect
 - Shaman and druid: all four
 
-Switch any scroll on or off on the Scrolls tab of the settings. Each scroll you switch on gets its own "Keep in bags" slider: one stack (5) by default, up to two stacks.
+Switch any scroll on or off on the Scrolls tab of the settings. Each scroll you switch on gets a slider for how many to keep in bags: one stack (5) by default, up to two stacks.
 
 ## How it decides
 
-- **Already on you:** a scroll buff, or a class buff that is at least as strong (Power Word: Fortitude covers Stamina, Arcane Intellect covers Intellect, Divine Spirit covers Spirit). Nothing to do.
-- **You can cast it yourself:** a mage gets an Arcane Intellect button instead of a scroll, a priest gets Fortitude.
-- **The group gives it:** a priest or mage in the group whose buff is stronger than your scroll. Shown dimmed with a dot in their class color, not counted as missing.
-- **Runs out soon:** less than 5 minutes left (adjustable), with a timer. Click to refresh.
-- **Stronger rank in your bags:** offered as an upgrade.
-- **Missing:** click to apply. The best rank for your level is used, or a lower one if that is all you have.
-- **Out of scrolls:** shown dimmed with 0, so you know what to buy.
+- A scroll buff already on you, or a class buff that is at least as strong, hides the scroll: Power Word: Fortitude covers Stamina, Arcane Intellect covers Intellect, Divine Spirit covers Spirit.
+- If you can cast the buff yourself, the panel offers the spell instead of a scroll: Arcane Intellect for a mage, Fortitude for a priest.
+- If a priest or mage in the group gives a stronger buff than your scroll, the scroll is dimmed with a dot in their class color and is not counted as missing.
+- With less than 5 minutes left (adjustable) the icon shows a timer. Click it to refresh the buff.
+- A stronger rank in your bags than the active one is offered as an upgrade, with its rank in green.
+- A missing buff uses the best rank for your level, or a lower one if that is all you have.
+- A scroll you are out of stays dimmed with a red 0, so you know what to buy.
 
 Stacking rules come from the server and may differ from Classic. When a scroll bounces off a stronger buff ("A more powerful spell is already active"), the addon remembers which buff blocked it and stops offering that scroll while the buff is on you.
 
@@ -59,13 +59,13 @@ Switch on the ones you carry at the bottom of the Scrolls tab and set how many t
 
 ## Auction house
 
-When you open the auction house, a panel next to it lists the scrolls you are short of, up to the stock you keep for each scroll (5 by default). Scrolls in the bank count toward it; switch off "Count scrolls in the bank" right in the panel to buy the full stock for your bags. Buffs you cast yourself are left out.
+When you open the auction house, a panel next to it lists the scrolls you are short of, up to the stock you keep for each scroll (5 by default). Scrolls in the bank count toward it; switch off "Count scrolls in the bank" in the panel to buy the full stock for your bags. Buffs you cast yourself are left out.
 
 - The strongest rank on sale is chosen by default. Under each scroll all four ranks are listed with their bonus and price per scroll; click another rank to buy it instead, and your pick is remembered. Ranks above your level, switched off or not for sale are shown locked. Hover a rank for how many are on sale at that price and what comes after.
 - The stock counts the rank you buy and higher ones. With 2 scrolls of rank IV and 3 of rank III you keep 2 of 5 rank IV scrolls, and the panel offers 3 more of rank IV. Pick rank III instead and the same bags hold 5 of 5.
 - Lower ranks are listed when "Use lower ranks" is on. Turn it off to keep and buy only the best rank.
-- **Price jump guard.** A purchase takes only scrolls priced at most 20% (adjustable) above the cheapest one. If 4 scrolls cost 15s and the fifth costs 1g, the panel buys 4 and tells you the rest is dearer.
-- **Buy N** buys that scroll in one click. If the price went up since the lookup, the row asks you to confirm the new price.
+- The price jump guard buys only scrolls priced at most 20% (adjustable) above the cheapest one. If 4 scrolls cost 15s and the fifth costs 1g, the panel buys 4 and tells you the rest is dearer.
+- **Buy N** buys that scroll. If the price went up since the lookup, the row asks you to confirm the new price.
 - Rows show when a scroll is not for sale or you are short of gold.
 
 ![The restock panel next to the auction house](https://raw.githubusercontent.com/Jagerente/ReScroll/main/branding/screenshots/auction.png)
@@ -82,11 +82,11 @@ Both panels sit to the right of their window and follow it, also when a bag addo
 
 `/scrolls` opens the settings:
 
-- **Scrolls:** which buffs to track and in what order (drag the rows), counting on the group, how many of each to keep, lower ranks, upgrades, scrolls you are out of, the refresh threshold, the utility scrolls and when their panel shows up
-- **Panel:** when it shows up, icon size, icons per row, spacing, which way it grows, the title line, scroll counts, lock, the background of the panel and of the auction and bank panels
-- **Auction:** the auction house list, counting the bank, the price jump guard, where the panel sits
-- **Bank:** the bank panel, taking scrolls from the bank right away, where the panel sits
-- **General:** the Apply key, minimap button, language
+- The Scrolls tab picks which buffs to track and in what order (drag the rows), how many of each to keep, the utility scrolls and when their panel shows up, and the rules: counting on the group, lower ranks, upgrades, scrolls you are out of, the refresh threshold.
+- The Panel tab sets when the panel shows up, icon size, icons per row, spacing, which way it grows, the title line, scroll counts, the lock and the background of the panels.
+- The Auction tab turns the auction house list on or off and sets counting the bank, the price jump guard and where the panel sits.
+- The Bank tab turns the bank panel on or off and sets taking scrolls as soon as the bank opens and where the panel sits.
+- The General tab has the Apply key, the minimap button and the language.
 
 The preview switch at the top shows the panel with sample scrolls in every state.
 

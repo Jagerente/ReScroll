@@ -6,9 +6,6 @@ local Bank = ns.Bank
 local Catalog = ns.Catalog
 local SidePanel = ns.SidePanel
 
-local BankPanel = {}
-ns.BankPanel = BankPanel
-
 local HOSTS = { "EUI_BankFrame", "BankFrame" }
 
 local panel
@@ -60,17 +57,12 @@ local function Create()
         title = "BANK_TITLE",
         empty = "BANK_DONE",
         onAction = function() Bank.Take() end,
-        actionHint = "BANK_TAKE_ALL_DESC",
-        toggle = { key = "bankAuto", label = "BANK_AUTO", desc = "BANK_AUTO_DESC" },
+        toggle = { key = "bankAuto", label = "BANK_AUTO" },
         hosts = HOSTS,
         slot = "bank",
         offset = { x = "bankX", y = "bankY" },
         settingsPage = "bank",
     })
-end
-
-function BankPanel.IsShown()
-    return panel ~= nil and panel:IsShown()
 end
 
 ns.Listen("BANK_SHOWN", function(open)

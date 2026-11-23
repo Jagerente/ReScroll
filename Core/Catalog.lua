@@ -52,11 +52,17 @@ function Catalog.Name(family)
     return C_Spell.GetSpellName(family.top.spell) or family.key
 end
 
+local ROMAN = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII" }
+
+function Catalog.RomanRank(rank)
+    return ROMAN[rank.index] or tostring(rank.index)
+end
+
 function Catalog.RankName(family, rank)
     if family.utility then return ItemName(rank) or family.key end
     if family.label then return C_Spell.GetSpellName(rank.spell) or Catalog.Name(family) end
     if #family.ranks == 1 then return Catalog.Name(family) end
-    return Catalog.Name(family) .. " " .. ns.Bar.RomanRank(rank)
+    return Catalog.Name(family) .. " " .. Catalog.RomanRank(rank)
 end
 
 function Catalog.Icon(family, rank)
