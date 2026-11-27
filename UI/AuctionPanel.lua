@@ -36,7 +36,9 @@ local function Detail(entry)
     local status = entry.status
     local offer = entry.offer
     if status == Market.SEARCHING then return L.AH_SEARCHING, C.muted end
-    if status == Market.IDLE or status == Market.ENOUGH then return SidePanel.Stock(entry), C.muted end
+    if status == Market.IDLE or status == Market.ENOUGH or status == Market.ESTIMATED then
+        return SidePanel.Stock(entry), C.muted
+    end
     if status == Market.NONE then return L.AH_NONE, C.bad end
     if status == Market.POOR then return L.AH_POOR, C.bad end
     if status == Market.BUYING then return L.AH_BUYING, C.accent end
@@ -281,7 +283,8 @@ local function PaintRow(row, fresh)
 
     row.button.text:SetText(ButtonText(entry, confirm))
     row.button:SetStyle(confirm and "primary" or "default")
-    SidePanel.SetEnabled(row.button, status == Market.IDLE or status == Market.READY or confirm)
+    local buyable = status == Market.READY or status == Market.ESTIMATED or confirm
+    SidePanel.SetEnabled(row.button, status == Market.IDLE or buyable)
     PaintStrip(row, fresh)
     local strip = #entry.family.ranks > 1 and STRIP_TOP + STRIP_HEIGHT or 0
     row:SetHeight(SidePanel.HEAD_HEIGHT + strip)

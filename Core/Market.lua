@@ -15,6 +15,7 @@ Market.CONFIRM = "confirm"
 Market.POOR = "poor"
 Market.RAISED = "raised"
 Market.ENOUGH = "enough"
+Market.ESTIMATED = "estimated"
 
 local COMMODITY, ITEM = "commodity", "item"
 local PURCHASE_TIMEOUT = 10
@@ -53,6 +54,15 @@ local function Estimate(item)
     if not (api and api.GetAuctionPriceByItemID) then return nil end
     local price = api.GetAuctionPriceByItemID(ns.ADDON, item)
     return type(price) == "number" and price > 0 and price or nil
+end
+
+local function IsCommodity(item)
+    local info = C_AuctionHouse.GetItemKeyInfo(C_AuctionHouse.MakeItemKey(item))
+    if info then return info.isCommodity end
+end
+
+local function BuysAtEstimate(offer)
+    return offer.estimate ~= nil and offer.commodity == true
 end
 
 function Market.Busy(entry)
@@ -107,7 +117,7 @@ local function Settle(entry)
     elseif offer.need <= 0 then
         entry.status = Market.ENOUGH
     elseif offer.status == Market.IDLE then
-        entry.status = Market.IDLE
+        entry.status = BuysAtEstimate(offer) and Market.ESTIMATED or Market.IDLE
     elseif offer.nextCost > GetMoney() then
         entry.status = Market.POOR
     elseif Market.IsRaised(offer) then
@@ -277,7 +287,11 @@ end
 local function SetRanks(entry, wanted)
     DropOffers(entry)
     for index, rank in ipairs(wanted.ranks) do
-        local offer = { entry = entry, rank = rank, item = rank.item, estimate = Estimate(rank.item) }
+        local estimate = Estimate(rank.item)
+        local offer = {
+            entry = entry, rank = rank, item = rank.item,
+            estimate = estimate, commodity = estimate and IsCommodity(rank.item),
+        }
         CopyStock(offer, wanted.stocks[index])
         entry.offers[index] = offer
         byItem[rank.item] = offer
@@ -330,14 +344,25 @@ local function HasResult(entry)
     return entry.priced or PRICED[entry.status] or entry.status == Market.NONE
 end
 
+local function HasPrice(entry)
+    return HasResult(entry) or entry.status == Market.ESTIMATED
+end
+
 local function MarkPriced(entry)
     asked[entry.family.key] = true
     entry.priced = true
 end
 
+local function DropQuote(entry)
+    if entry.status ~= Market.CONFIRM then return end
+    C_AuctionHouse.CancelCommoditiesPurchase()
+    entry.status = Market.IDLE
+end
+
 function Market.Refresh()
     for _, entry in ipairs(entries) do
-        if HasResult(entry) and not Market.Busy(entry) then
+        DropQuote(entry)
+        if HasPrice(entry) and not Market.Busy(entry) then
             MarkPriced(entry)
             Research(entry)
         end
@@ -366,15 +391,16 @@ end
 function Market.PriceCounts()
     local waiting, known = 0, 0
     for _, entry in ipairs(entries) do
-        if HasResult(entry) then known = known + 1 else waiting = waiting + 1 end
+        if HasPrice(entry) then known = known + 1 else waiting = waiting + 1 end
     end
     return waiting, known
 end
 
 function Market.EstimatedCost(entry)
     local offer = entry.offer
+    local status = entry.status
     if entry.cooling or not offer or not offer.estimate then return nil end
-    if entry.status ~= Market.IDLE and entry.status ~= Market.SEARCHING then return nil end
+    if status ~= Market.IDLE and status ~= Market.SEARCHING and status ~= Market.ESTIMATED then return nil end
     return offer.estimate * entry.need
 end
 
@@ -385,7 +411,11 @@ function Market.Pick(entry, rank)
     ns.charDB.buyRanks[entry.family.key] = not default and rank.index or nil
     Settle(entry)
     ns.Fire("STOCK_CHANGED")
-    Market.FindPrices(entry)
+    if entry.status == Market.ESTIMATED then
+        Changed()
+    else
+        Market.FindPrices(entry)
+    end
 end
 
 local function FinishCooling(entry)
@@ -429,11 +459,17 @@ function Market.Buy(entry)
         BeginPurchase(entry)
         return
     end
-    if entry.status == Market.RAISED then seen[offer.item] = offer.base end
-    if entry.status ~= Market.READY and entry.status ~= Market.RAISED then return end
+    local status = entry.status
+    if status == Market.RAISED then seen[offer.item] = offer.base end
+    if status ~= Market.READY and status ~= Market.RAISED and status ~= Market.ESTIMATED then return end
     MarkPriced(entry)
-    if offer.kind == COMMODITY then
-        C_AuctionHouse.StartCommoditiesPurchase(offer.item, offer.quantity, offer.unitPrice)
+    if status == Market.ESTIMATED then
+        offer.kind, offer.quantity = COMMODITY, entry.need
+        entry.limit = Ceiling(offer.estimate) * offer.quantity
+        C_AuctionHouse.StartCommoditiesPurchase(offer.item, offer.quantity)
+    elseif offer.kind == COMMODITY then
+        entry.limit = offer.quantity * offer.unitPrice
+        C_AuctionHouse.StartCommoditiesPurchase(offer.item, offer.quantity)
     else
         local auction = offer.auctions[1]
         C_AuctionHouse.PlaceBid(auction.auctionID, auction.buyoutAmount)
@@ -462,7 +498,7 @@ local function OnPriceUpdated(_, totalPrice)
     if not entry or entry.offer.kind ~= COMMODITY then return end
     local offer = entry.offer
     entry.quotedTotal = totalPrice
-    if totalPrice <= offer.quantity * offer.unitPrice then
+    if totalPrice <= entry.limit then
         C_AuctionHouse.ConfirmCommoditiesPurchase(offer.item, offer.quantity)
         Changed()
         return
@@ -520,7 +556,19 @@ local function RefreshEstimates()
     if not Market.open then return end
     for item, offer in pairs(byItem) do
         offer.estimate = Estimate(item)
+        if offer.estimate and offer.commodity == nil then offer.commodity = IsCommodity(item) end
     end
+    for _, entry in ipairs(entries) do
+        Settle(entry)
+    end
+    Changed()
+end
+
+local function OnItemKeyInfo(item)
+    local offer = byItem[item]
+    if not offer or not offer.estimate or offer.commodity ~= nil then return end
+    offer.commodity = IsCommodity(item)
+    Settle(offer.entry)
     Changed()
 end
 
@@ -601,6 +649,7 @@ ns.Listen("LOGIN", function()
     ns.RegisterEvent("AUCTION_HOUSE_CLOSED", OnClosed)
     ns.RegisterEvent("COMMODITY_SEARCH_RESULTS_UPDATED", OnCommodityResults)
     ns.RegisterEvent("ITEM_SEARCH_RESULTS_UPDATED", OnItemResults)
+    ns.RegisterEvent("ITEM_KEY_ITEM_INFO_RECEIVED", OnItemKeyInfo)
     ns.RegisterEvent("COMMODITY_PRICE_UPDATED", OnPriceUpdated)
     ns.RegisterEvent("COMMODITY_PRICE_UNAVAILABLE", OnPurchaseDone)
     ns.RegisterEvent("COMMODITY_PURCHASE_SUCCEEDED", OnCommodityBought)
