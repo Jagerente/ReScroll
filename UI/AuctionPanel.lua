@@ -19,6 +19,7 @@ local CLEAR = { 1, 1, 1, 0 }
 local Money, ShortMoney = SidePanel.Money, SidePanel.ShortMoney
 local HOSTS = { "AuctionHouseFrame" }
 local PRICE_UNKNOWN = "—"
+local ESTIMATE_FORMAT = "≈ %s"
 local FIND_ALL_MIN_ROWS = 2
 
 local panel
@@ -147,7 +148,10 @@ local function SegmentPrice(rank, offer)
         if rank.level > UnitLevel("player") then return string.format(L.AH_LOCK_LEVEL_SHORT, rank.level), C.muted end
         return L.AH_LOCK_LOWER_SHORT, C.muted
     end
-    if offer.status == Market.IDLE then return PRICE_UNKNOWN, C.muted end
+    if offer.status == Market.IDLE then
+        if offer.estimate then return string.format(ESTIMATE_FORMAT, ShortMoney(offer.estimate)), C.muted end
+        return PRICE_UNKNOWN, C.muted
+    end
     if not Market.IsSettled(offer) then return "…", C.muted end
     if offer.status ~= Market.READY then return L.AH_NONE_SHORT, C.muted end
     return ShortMoney(offer.unitCost), Market.IsRaised(offer) and C.warn or C.text
@@ -265,9 +269,15 @@ local function PaintRow(row, fresh)
     local quoted = status == Market.CONFIRM
     local confirm = quoted or status == Market.RAISED
     local priced = status == Market.READY or status == Market.POOR or confirm
-    row.price:SetShown(priced)
-    if priced then row.price:SetText(Money(quoted and entry.quotedTotal or entry.offer.nextCost)) end
-    row.price:SetTextColor(unpack(confirm and C.warn or C.text))
+    local estimate = Market.EstimatedCost(entry)
+    row.price:SetShown(priced or estimate ~= nil)
+    if priced then
+        row.price:SetText(Money(quoted and entry.quotedTotal or entry.offer.nextCost))
+        row.price:SetTextColor(unpack(confirm and C.warn or C.text))
+    elseif estimate then
+        row.price:SetText(string.format(ESTIMATE_FORMAT, ShortMoney(estimate)))
+        row.price:SetTextColor(unpack(C.muted))
+    end
 
     row.button.text:SetText(ButtonText(entry, confirm))
     row.button:SetStyle(confirm and "primary" or "default")
@@ -280,11 +290,17 @@ end
 local function Paint()
     panel.subtitle:SetText(ns.db.lowerRanks and L.AH_SUBTITLE_LOWER or L.AH_SUBTITLE)
     local waiting, known = Market.PriceCounts()
+    local total, approximate = Market.Total()
     local offerAll = waiting >= FIND_ALL_MIN_ROWS
-    panel:SetFooterShown(offerAll or known > 0)
+    local showTotal = known > 0 or approximate
+    panel:SetFooterShown(offerAll or showTotal)
     panel:PaintRows(Market.entries, CreateRow, PaintRow)
-    panel.footerText:SetText(string.format(L.AH_TOTAL, Money(Market.Total())))
-    panel.footerText:SetShown(known > 0)
+    if approximate then
+        panel.footerText:SetText(string.format(L.AH_ABOUT, ShortMoney(total)))
+    else
+        panel.footerText:SetText(string.format(L.AH_TOTAL, Money(total)))
+    end
+    panel.footerText:SetShown(showTotal)
     panel:SetAction(L.AH_FIND_PRICES, true)
     panel.action:SetShown(offerAll)
     panel.refresh:SetShown(known > 0)

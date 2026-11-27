@@ -32,6 +32,8 @@ local askedAll = false
 local buying
 local purchaseTimer
 local windowOpen = false
+local watchingEstimates = false
+local PRICED = { ready = true, poor = true, raised = true }
 
 local function Changed()
     ns.Fire("MARKET_CHANGED")
@@ -39,6 +41,18 @@ end
 
 local function CancelTimer(timer)
     if timer then timer:Cancel() end
+end
+
+local function AuctionatorAPI()
+    local auctionator = Auctionator
+    return auctionator and auctionator.API and auctionator.API.v1
+end
+
+local function Estimate(item)
+    local api = AuctionatorAPI()
+    if not (api and api.GetAuctionPriceByItemID) then return nil end
+    local price = api.GetAuctionPriceByItemID(ns.ADDON, item)
+    return type(price) == "number" and price > 0 and price or nil
 end
 
 function Market.Busy(entry)
@@ -213,7 +227,7 @@ local function ReadItems(offer, itemKey)
 end
 
 local function Accepts(offer)
-    if not offer or offer.status == Market.QUEUED or offer.status == Market.IDLE then return false end
+    if not offer then return false end
     local entry = offer.entry
     return not (Market.Busy(entry) and entry.offer == offer)
 end
@@ -263,7 +277,7 @@ end
 local function SetRanks(entry, wanted)
     DropOffers(entry)
     for index, rank in ipairs(wanted.ranks) do
-        local offer = { entry = entry, rank = rank, item = rank.item }
+        local offer = { entry = entry, rank = rank, item = rank.item, estimate = Estimate(rank.item) }
         CopyStock(offer, wanted.stocks[index])
         entry.offers[index] = offer
         byItem[rank.item] = offer
@@ -312,9 +326,21 @@ local function Rebuild()
     ns.AuctionQueue:Pump()
 end
 
+local function HasResult(entry)
+    return entry.priced or PRICED[entry.status] or entry.status == Market.NONE
+end
+
+local function MarkPriced(entry)
+    asked[entry.family.key] = true
+    entry.priced = true
+end
+
 function Market.Refresh()
     for _, entry in ipairs(entries) do
-        if entry.priced and not Market.Busy(entry) then Research(entry) end
+        if HasResult(entry) and not Market.Busy(entry) then
+            MarkPriced(entry)
+            Research(entry)
+        end
     end
     Changed()
     ns.AuctionQueue:Pump()
@@ -322,8 +348,7 @@ end
 
 local function RequestPrices(entry)
     if entry.priced or Market.Busy(entry) then return end
-    asked[entry.family.key] = true
-    entry.priced = true
+    MarkPriced(entry)
     Research(entry)
 end
 
@@ -341,9 +366,16 @@ end
 function Market.PriceCounts()
     local waiting, known = 0, 0
     for _, entry in ipairs(entries) do
-        if entry.priced then known = known + 1 else waiting = waiting + 1 end
+        if HasResult(entry) then known = known + 1 else waiting = waiting + 1 end
     end
     return waiting, known
+end
+
+function Market.EstimatedCost(entry)
+    local offer = entry.offer
+    if entry.cooling or not offer or not offer.estimate then return nil end
+    if entry.status ~= Market.IDLE and entry.status ~= Market.SEARCHING then return nil end
+    return offer.estimate * entry.need
 end
 
 function Market.Pick(entry, rank)
@@ -399,6 +431,7 @@ function Market.Buy(entry)
     end
     if entry.status == Market.RAISED then seen[offer.item] = offer.base end
     if entry.status ~= Market.READY and entry.status ~= Market.RAISED then return end
+    MarkPriced(entry)
     if offer.kind == COMMODITY then
         C_AuctionHouse.StartCommoditiesPurchase(offer.item, offer.quantity, offer.unitPrice)
     else
@@ -408,19 +441,20 @@ function Market.Buy(entry)
     BeginPurchase(entry)
 end
 
-local PRICED = { ready = true, poor = true, raised = true }
-
 function Market.Total()
-    local cost = 0
+    local cost, approximate = 0, false
     for _, entry in ipairs(entries) do
         local status = entry.status
         if status == Market.CONFIRM then
             cost = cost + entry.quotedTotal
         elseif PRICED[status] then
             cost = cost + entry.offer.cost
+        else
+            local estimate = Market.EstimatedCost(entry)
+            if estimate then cost, approximate = cost + estimate, true end
         end
     end
-    return cost
+    return cost, approximate
 end
 
 local function OnPriceUpdated(_, totalPrice)
@@ -482,8 +516,25 @@ local function Reset()
     wipe(seen)
 end
 
+local function RefreshEstimates()
+    if not Market.open then return end
+    for item, offer in pairs(byItem) do
+        offer.estimate = Estimate(item)
+    end
+    Changed()
+end
+
+local function WatchEstimates()
+    if watchingEstimates then return end
+    local api = AuctionatorAPI()
+    if not (api and api.RegisterForDBUpdate) then return end
+    watchingEstimates = true
+    api.RegisterForDBUpdate(ns.ADDON, function() ns.Schedule("marketEstimates", 0, RefreshEstimates) end)
+end
+
 local function ShowPanel()
     Market.open = true
+    WatchEstimates()
     Reset()
     Rebuild()
     ns.Fire("MARKET_SHOWN", true)
