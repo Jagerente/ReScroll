@@ -356,17 +356,33 @@ ns.Listen("SETTING_CHANGED", function(key)
     if key == nil then ns.Dock:Changed() end
 end)
 
+local TIP_GAP = " "
+
+function SidePanel.AddRightClick(action)
+    local gesture, value = C.accent, C.text
+    GameTooltip:AddLine(TIP_GAP)
+    GameTooltip:AddDoubleLine(L.TIP_RIGHT_CLICK, action, gesture[1], gesture[2], gesture[3], value[1], value[2], value[3])
+end
+
 local function ShowRowTooltip(head)
     local row = head:GetParent()
     GameTooltip:SetOwner(head, "ANCHOR_RIGHT")
     GameTooltip:SetItemByID(row.tooltipItem(row.entry))
+    if row.addHints then row.addHints(row.entry) end
     GameTooltip:Show()
 end
 
-function SidePanel.NewRow(panel, onButton, tooltipItem)
+local function OnRowMouseUp(head, button)
+    local row = head:GetParent()
+    if button == "RightButton" then row.onRightClick(row.entry) end
+end
+
+function SidePanel.NewRow(panel, onButton, tooltipItem, onRightClick, addHints)
     local row = CreateFrame("Frame", nil, panel.list)
     row:SetSize(SidePanel.ROW_WIDTH, HEAD_HEIGHT)
     row.tooltipItem = tooltipItem
+    row.onRightClick = onRightClick
+    row.addHints = addHints
     row.fade = {}
 
     local head = CreateFrame("Frame", nil, row)
@@ -401,6 +417,8 @@ function SidePanel.NewRow(panel, onButton, tooltipItem)
 
     head:SetScript("OnEnter", ShowRowTooltip)
     head:SetScript("OnLeave", W.HideHint)
+    head.UpdateTooltip = ShowRowTooltip
+    if onRightClick then head:SetScript("OnMouseUp", OnRowMouseUp) end
     W.RowHover(head)
     return row
 end

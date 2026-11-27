@@ -89,27 +89,46 @@ local function LockLines(segment)
     AddLine(L.AH_SEARCHING, C.muted)
 end
 
+local function AddPriceLines(segment)
+    local offer = segment.offer
+    GameTooltip:AddLine(" ")
+    if not OnSale(offer) then
+        LockLines(segment)
+        return
+    end
+    AddLine(string.format(L.AH_PER_ITEM, Money(offer.unitCost)), C.text)
+    if offer.quantity > 0 then
+        AddLine(string.format(L.AH_TIP_TOTAL, offer.quantity, Money(offer.cost)), C.muted)
+    else
+        AddLine(L.AH_TIP_ENOUGH, C.muted)
+    end
+    if offer.beyond then AddLine(string.format(L.AH_TIP_BEYOND, Money(offer.beyond)), C.warn) end
+end
+
+local function CanRefresh(entry)
+    return entry.status ~= Market.BUYING
+end
+
 local function ShowSegmentTooltip(segment)
     local offer = segment.offer
     GameTooltip:SetOwner(segment, "ANCHOR_RIGHT")
     GameTooltip:SetItemByID(segment.rank.item)
-    if offer and offer.status == Market.IDLE then
-        GameTooltip:Show()
-        return
-    end
-    GameTooltip:AddLine(" ")
-    if not OnSale(offer) then
-        LockLines(segment)
-    else
-        AddLine(string.format(L.AH_PER_ITEM, Money(offer.unitCost)), C.text)
-        if offer.quantity > 0 then
-            AddLine(string.format(L.AH_TIP_TOTAL, offer.quantity, Money(offer.cost)), C.muted)
-        else
-            AddLine(L.AH_TIP_ENOUGH, C.muted)
-        end
-        if offer.beyond then AddLine(string.format(L.AH_TIP_BEYOND, Money(offer.beyond)), C.warn) end
-    end
+    if not (offer and offer.status == Market.IDLE) then AddPriceLines(segment) end
+    if offer and CanRefresh(offer.entry) then SidePanel.AddRightClick(L.AH_TIP_REFRESH) end
     GameTooltip:Show()
+end
+
+local function AddRowHints(entry)
+    if not CanRefresh(entry) then return end
+    SidePanel.AddRightClick(#entry.offers > 1 and L.AH_TIP_REFRESH_ALL or L.AH_TIP_REFRESH)
+end
+
+local function OnSegmentClick(entry, segment, button)
+    if button == "RightButton" then
+        if segment.offer then Market.Refresh(entry, segment.offer) end
+    else
+        Market.Pick(entry, segment.rank)
+    end
 end
 
 local function CreateSegment(row, index)
@@ -127,7 +146,8 @@ local function CreateSegment(row, index)
     segment.price:SetPoint("BOTTOMLEFT", SEGMENT_INSET, LINE_INSET + UNDERLINE_HEIGHT)
     segment.price:SetPoint("RIGHT", -SEGMENT_INSET, 0)
     segment.price:SetJustifyH("LEFT")
-    segment:SetScript("OnClick", function(self) Market.Pick(row.entry, self.rank) end)
+    segment:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    segment:SetScript("OnClick", function(self, button) OnSegmentClick(row.entry, self, button) end)
     segment.UpdateTooltip = ShowSegmentTooltip
     segment:HookScript("OnEnter", ShowSegmentTooltip)
     segment:HookScript("OnLeave", W.HideHint)
@@ -159,7 +179,7 @@ local function SegmentPrice(rank, offer)
     return ShortMoney(offer.unitCost), Market.IsRaised(offer) and C.warn or C.text
 end
 
-local function PaintSegment(segment, rank, offer, chosen, busy)
+local function PaintSegment(segment, rank, offer, chosen, buying)
     segment.rank, segment.offer = rank, offer
     segment.rankText:SetText(Catalog.RomanRank(rank))
     segment.rankText:SetTextColor(unpack(chosen and C.accent or C.text))
@@ -168,7 +188,7 @@ local function PaintSegment(segment, rank, offer, chosen, busy)
     segment.price:SetText(text)
     segment.price:SetTextColor(unpack(color))
     local available = offer ~= nil and Market.IsAvailable(offer)
-    segment:SetEnabled(available and not busy)
+    segment:SetEnabled(offer ~= nil and not buying)
     segment:SetAlpha((available or chosen) and 1 or SidePanel.DISABLED_ALPHA)
     segment:Show()
 end
@@ -193,7 +213,7 @@ local function PaintStrip(row, fresh)
     if count < 2 then return end
 
     local width = (SidePanel.ROW_WIDTH - SidePanel.TEXT_INDENT) / count
-    local busy = Market.Busy(entry)
+    local buying = not CanRefresh(entry)
     local selected
     for index = 1, count do
         local rank = ranks[count - index + 1]
@@ -203,7 +223,7 @@ local function PaintStrip(row, fresh)
         segment:SetPoint("LEFT", (index - 1) * width, 0)
         local chosen = offer ~= nil and entry.offer == offer
         if chosen then selected = index end
-        PaintSegment(segment, rank, offer, chosen, busy)
+        PaintSegment(segment, rank, offer, chosen, buying)
         if index > 1 then
             local divider = Divider(row, index)
             divider:SetPoint("LEFT", (index - 1) * width, 0)
@@ -252,8 +272,12 @@ local function OnRowButton(entry)
     end
 end
 
+local function RefreshRow(entry)
+    Market.Refresh(entry)
+end
+
 local function CreateRow(owner)
-    local row = SidePanel.NewRow(owner, OnRowButton, ShownItem)
+    local row = SidePanel.NewRow(owner, OnRowButton, ShownItem, RefreshRow, AddRowHints)
     CreateStrip(row)
     return row
 end
@@ -277,7 +301,7 @@ local function PaintRow(row, fresh)
         row.price:SetText(Money(quoted and entry.quotedTotal or entry.offer.nextCost))
         row.price:SetTextColor(unpack(confirm and C.warn or C.text))
     elseif estimate then
-        row.price:SetText(string.format(ESTIMATE_FORMAT, ShortMoney(estimate)))
+        row.price:SetText(string.format(ESTIMATE_FORMAT, Money(estimate)))
         row.price:SetTextColor(unpack(C.muted))
     end
 
@@ -293,16 +317,12 @@ end
 local function Paint()
     panel.subtitle:SetText(ns.db.lowerRanks and L.AH_SUBTITLE_LOWER or L.AH_SUBTITLE)
     local waiting, known = Market.PriceCounts()
-    local total, approximate = Market.Total()
+    local total, approximate, counted = Market.Total()
     local offerAll = waiting >= FIND_ALL_MIN_ROWS
-    local showTotal = known > 0 or approximate
+    local showTotal = counted > 0
     panel:SetFooterShown(offerAll or showTotal)
     panel:PaintRows(Market.entries, CreateRow, PaintRow)
-    if approximate then
-        panel.footerText:SetText(string.format(L.AH_ABOUT, ShortMoney(total)))
-    else
-        panel.footerText:SetText(string.format(L.AH_TOTAL, Money(total)))
-    end
+    panel.footerText:SetText(string.format(approximate and L.AH_ABOUT or L.AH_TOTAL, Money(total)))
     panel.footerText:SetShown(showTotal)
     panel:SetAction(L.AH_FIND_PRICES, true)
     panel.action:SetShown(offerAll)
@@ -313,7 +333,7 @@ local function Create()
     panel = SidePanel.Create("ReScrollAuctionPanel", {
         title = "AH_TITLE",
         empty = "AH_EMPTY",
-        refresh = Market.Refresh,
+        refresh = function() Market.Refresh() end,
         onAction = function() Market.FindPrices() end,
         toggles = { { key = "countBank", label = "COUNT_BANK", desc = "COUNT_BANK_DESC" } },
         hosts = HOSTS,
